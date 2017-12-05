@@ -1,0 +1,25 @@
+SYSCLK_Frequency=168000000 
+SystemCoreClock=168000000 
+HCLK_Frequency=168000000 
+PCLK1_Frequency=42000000 
+PCLK2_Frequency=84000000 
+done
+Erasing flash sector 10 
+done
+Writing flash address 80c0000  bytes 64572 
+done
+Jumping to 0x80c0189 
+
+
+
+**********************
+* CP33 recorder      *
+**********************
+linux.c: kmalloc 127: result=0x20000bd8  size=65536  used=65536 
+linux.c: kmalloc 127: result=0x20010bd8  size=64  used=65600 
+usb.c: USBD_USR_Init 204: 
+stm32f4/usb_dcd_int.c: USBD_OTG_ISR_Handler 293: 
+usb.c: USBD_USR_DeviceReset 215: 
+stm32f4/usb_dcd_int.c: USBD_OTG_ISR_Handler 300: 
+usb.c: USBD_USR_DeviceConfigured 227: 
+usb.c: class_cb_DataOut 390: fragment_size=8192 

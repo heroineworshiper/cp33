@@ -1,0 +1,281 @@
+#include "settings.h"
+#include "stm32f4xx.h"
+#include "stm32f4xx_rcc.h"
+#include "stm32f4xx_gpio.h"
+#include "stm32f4xx_tim.h"
+#include "stm32f4xx_spi.h"
+#include "uart.h"
+#include "linux.h"
+#include "math.h"
+#include "misc.h"
+#include "cp33.h"
+#include "usb.h"
+
+
+
+#define BUFFER_SIZE 65536
+
+typedef struct 
+{
+	unsigned char *buffer;
+	int read_offset;
+	int write_offset;
+	int size;
+	int total_bytes;
+	int timer_high;
+	int current_channel;
+	int new_channel;
+	unsigned int new_value;
+	int have_frame;
+	unsigned int left_value;
+	unsigned int right_value;
+	int channel_complete;
+	int channel_complete_error;
+} cp33_t;
+
+cp33_t cp33;
+
+
+void init_i2s()
+{
+  GPIO_InitTypeDef GPIO_InitStructure;
+  I2S_InitTypeDef I2S_InitStructure;
+  
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI3, ENABLE);
+  GPIO_PinAFConfig(GPIOA, GPIO_PinSource15, GPIO_AF_SPI3);
+  GPIO_PinAFConfig(GPIOC, GPIO_PinSource10, GPIO_AF_SPI3);
+  GPIO_PinAFConfig(GPIOC, GPIO_PinSource12, GPIO_AF_SPI3);
+  
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+  GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_NOPULL;
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_15;
+  GPIO_Init(GPIOA, &GPIO_InitStructure);
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10 | GPIO_Pin_12;
+  GPIO_Init(GPIOC, &GPIO_InitStructure);
+ 
+  
+  SPI_I2S_DeInit(SPI3);
+  I2S_InitStructure.I2S_AudioFreq = I2S_AudioFreq_44k;
+  I2S_InitStructure.I2S_Standard = I2S_Standard_Phillips;
+  I2S_InitStructure.I2S_MCLKOutput = I2S_MCLKOutput_Disable;
+  I2S_InitStructure.I2S_CPOL = I2S_CPOL_Low;
+  I2S_InitStructure.I2S_DataFormat = I2S_DataFormat_32b;
+  I2S_InitStructure.I2S_Mode = I2S_Mode_SlaveRx;
+  I2S_Init(SPI3, &I2S_InitStructure);
+
+
+
+  	NVIC_InitTypeDef NVIC_InitStructure;
+	NVIC_InitStructure.NVIC_IRQChannel = SPI3_IRQn;
+  	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+  	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+  	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+ 	NVIC_Init(&NVIC_InitStructure);
+	SPI_I2S_ITConfig(SPI3, 
+		SPI_I2S_IT_RXNE, 
+		ENABLE);
+
+  I2S_Cmd(SPI3, ENABLE);
+}
+
+
+void SPI3_IRQHandler(void)
+{
+//	if((SPI3->SR & SPI_I2S_FLAG_RXNE) != 0)
+	{
+//		cp33.new_channel = (SPI3->SR & I2S_FLAG_CHSIDE) != 0;
+		cp33.new_channel = PIN_IS_SET(GPIOA, GPIO_Pin_15);
+		if(cp33.new_channel != cp33.current_channel)
+		{
+			TOGGLE_PIN(GPIOA, GPIO_Pin_14);
+			cp33.new_value = SPI3->DR << 16;
+			cp33.current_channel = cp33.new_channel;
+			if(!cp33.channel_complete)
+			{
+				cp33.channel_complete_error = 1;
+			}
+			cp33.channel_complete = 0;
+		}
+		else
+		{
+			cp33.channel_complete = 1;
+			cp33.new_value |= SPI3->DR;
+			if(!cp33.current_channel)
+			{
+				cp33.left_value = cp33.new_value;
+			}
+			else
+			{
+				cp33.right_value = cp33.new_value;
+				cp33.have_frame = 1;
+			}
+		}
+	}
+}
+
+
+
+int main(void)
+{
+	init_linux();
+/* Enable the GPIOs */
+	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA |
+			RCC_AHB1Periph_GPIOB |
+			RCC_AHB1Periph_GPIOC |
+			RCC_AHB1Periph_GPIOD |
+			RCC_AHB1Periph_GPIOE |
+			RCC_AHB1Periph_CCMDATARAMEN, 
+		ENABLE);
+// general purpose timer
+	TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM10, ENABLE);
+	TIM_DeInit(TIM10);
+	TIM_TimeBaseStructInit(&TIM_TimeBaseStructure);
+	TIM_TimeBaseStructure.TIM_Period = 65535;
+	TIM_TimeBaseStructure.TIM_Prescaler = 50;
+	TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+	TIM_TimeBaseInit(TIM10, &TIM_TimeBaseStructure);
+	TIM_Cmd(TIM10, ENABLE);
+
+// debug pin
+	GPIO_InitTypeDef  GPIO_InitStructure;
+
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_14;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
+	CLEAR_PIN(GPIOA, GPIO_Pin_14);
+
+
+	NVIC_SetVectorTable(NVIC_VectTab_FLASH, PROGRAM_START - 0x08000000);
+
+
+
+	init_uart();
+	print_lf();
+	print_text("**********************\n");
+	print_text("* CP33 recorder      *\n");
+	print_text("**********************\n");
+	flush_uart();
+
+	memset(&cp33, 0, sizeof(cp33_t));
+	cp33.buffer = kmalloc(BUFFER_SIZE, 0);
+	
+
+
+
+	init_usb();
+
+// have to use polling for all but sample capture
+  	NVIC_InitTypeDef NVIC_InitStructure;
+	NVIC_InitStructure.NVIC_IRQChannel = OTG_HS_IRQn;
+  	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+  	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+  	NVIC_InitStructure.NVIC_IRQChannelCmd = DISABLE;
+ 	NVIC_Init(&NVIC_InitStructure);
+
+
+//	mdelay(5000);
+
+	init_i2s();
+	usb_start_receive();
+
+	
+	while(1)
+	{
+		if(TIM10->SR & TIM_FLAG_Update)
+		{
+			cp33.timer_high++;
+			TIM10->SR = ~TIM_FLAG_Update;
+
+			if((cp33.timer_high % 50) == 0)
+			{
+//				TRACE2
+//				print_text("total_bytes=");
+//				print_number(cp33.total_bytes);
+//				print_text("timer_high=");
+//				print_number(cp33.timer_high);
+			}
+		}
+
+		USBD_OTG_ISR_Handler(&USB_OTG_dev);
+
+		handle_uart();
+
+#ifndef TEST_STREAM
+		if(cp33.have_frame)
+		{
+			cp33.have_frame = 0;
+			
+			if(cp33.channel_complete_error)
+			{
+				cp33.channel_complete_error = 0;
+				TRACE2
+				print_text("channel incomplete\n");
+			}
+			
+			if(cp33.size < BUFFER_SIZE)
+			{
+				*(int32_t*)(cp33.buffer + cp33.write_offset) = cp33.left_value;
+				cp33.write_offset += 4;
+				*(int32_t*)(cp33.buffer + cp33.write_offset) = cp33.right_value;
+				cp33.write_offset += 4;
+				cp33.size += 8;
+
+				if(cp33.write_offset >= BUFFER_SIZE) cp33.write_offset = 0;
+			}
+			else
+			{
+//						TRACE2
+//						print_text("buffer overflow\n");
+			}
+		}
+
+		
+#else // !TEST_STREAM
+		if(cp33.size < BUFFER_SIZE)
+		{
+			*(int32_t*)(cp33.buffer + cp33.write_offset) = test_value;
+			cp33.write_offset += 4;
+			*(int32_t*)(cp33.buffer + cp33.write_offset) = -test_value;
+			cp33.write_offset += 4;
+			cp33.size += 8;
+			cp33.total_bytes += 8;
+
+			if(cp33.write_offset >= BUFFER_SIZE) cp33.write_offset = 0;
+			test_value++;
+		}
+
+#endif // TEST_STREAM
+
+		if(cp33.size >= FRAGMENT_SIZE &&
+			usb.have_response &&
+			usb.have_beacon)
+		{
+			usb_start_transmit(cp33.buffer + cp33.read_offset, FRAGMENT_SIZE);
+			cp33.read_offset += FRAGMENT_SIZE;
+			if(cp33.read_offset >= BUFFER_SIZE) cp33.read_offset = 0;
+			cp33.size -= FRAGMENT_SIZE;
+		}
+		
+	}
+	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
