@@ -11,6 +11,7 @@
 #define EP1_SIZE 0x40
 #define SAMPLERATE 44100
 #define BUFFER_SIZE 0x10000
+#define TEXTLEN 1024
 
 typedef struct
 {
@@ -334,8 +335,14 @@ int main(int argc, char *argv[])
 	out = fopen(argv[1], "r");
 	if(out)
 	{
-		printf("Won't overwrite file.\n");
-		exit(1);
+		printf("Overwrite %s? (y/n)\n", argv[1]);
+        char string[TEXTLEN];
+        fgets(string, TEXTLEN, stdin);
+        if(strcmp(string, "y\n"))
+        {
+            printf("Giving up & going to a movie.\n");
+    		exit(1);
+        }
 	}
 
 	
