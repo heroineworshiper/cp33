@@ -21,6 +21,7 @@
 
 
 // build with make cp33.bin
+// flash it with ./uart_programmer cp33.bin
 
 
 #include "settings.h"
