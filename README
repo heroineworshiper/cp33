@@ -1,3 +1,6 @@
+This program adds outboard metronome, reverb, & recording to a dumb CP33.
+
+
 What you'll find here:
 
 
@@ -7,7 +10,7 @@ cp33.pcb: I2S capture board
 
 recordcp33.c: Original linux program that converted USB output to a sound file.
 
-piano.c, pianoserver.c, piano.h: the executable for the full audio processor
+piano.c, pianoserver.c, piano.h: the executable for the realtime audio processor
 
 index.html, metro.wav favicon.ico record.png stop.png single.gif: assets for the GUI
 
