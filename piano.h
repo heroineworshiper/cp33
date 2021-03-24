@@ -19,25 +19,24 @@
  * 
  */
 
-#ifndef CP33_H
-#define CP33_H
+
+#define TEXTLEN 1024
+#define SAMPLERATE 44100
+#define CLAMP(x, y, z) ((x) = ((x) < (y) ? (y) : ((x) > (z) ? (z) : (x))))
 
 
-typedef struct
-{
-	unsigned char *buffer;
-	int read_offset;
-	int write_offset;
-	int size;
-	int total_bytes;
-	int timer_high;
-	int fragment_size;
-} cp33_t;
-
-extern cp33_t cp33;
 
 
-#endif
+
+
+void start_recording();
+void stop_recording();
+void set_speaker(int value);
+void set_line(int value);
+void handle_input(char *state);
+void handle_update(char *state);
+void save_settings();
+
 
 
 

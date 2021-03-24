@@ -1,0 +1,19 @@
+What you'll find here:
+
+
+cp33.c: STM32 firmware that runs inside the CP33 to convert I2S to USB
+
+cp33.pcb: I2S capture board
+
+recordcp33.c: Original linux program that converted USB output to a sound file.
+
+piano.c, pianoserver.c, piano.h: the executable for the full audio processor
+
+index.html, metro.wav favicon.ico record.png stop.png single.gif: assets for the GUI
+
+wifi.py: useful script for bringing up wifi
+
+Instructions for building are in cp33.c & piano.c
+
+
+

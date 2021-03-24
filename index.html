@@ -1,0 +1,551 @@
+<!-- Web interface for the piano -->
+<meta charset="utf-8">
+
+<style>
+
+h1 {
+    font-size: 300%;
+}
+
+.slidecontainer {
+    width: 100%;
+}
+
+.slider {
+    -webkit-appearance: none;
+    width: 90%;
+    height: 5%;
+    background: #ffffff;
+    outline: solid;
+    opacity: 1;
+    -webkit-transition: .2s;
+    transition: opacity .2s;
+}
+
+.slider:hover {
+    opacity: 1;
+}
+
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 10%;
+    height: 100%;
+    background: #000000;
+    cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+    width: 25px;
+    height: 100%;
+    background: #4CAF50;
+    cursor: pointer;
+}
+
+
+.checkbox {
+    width: 5%;
+    height: 5%;
+}
+
+.button {
+    width: 25%; 
+    height: 5%; 
+    font-size: 48px;
+}
+
+/* the textbox */
+.text {
+    width: 20%; 
+/*    height: 5%; */
+    font-size: 48px;
+}
+
+</style>
+
+<CENTER>
+<H1>
+<P>
+HEADPHONE VOLUME: 
+<input type="range" id="volume" class="slider" onchange="inputEvent()"><BR>
+METRONOME VOLUME: 
+<input type="range" id="mvolume" class="slider" onchange="inputEvent()"><BR>
+LINE VOLUME: 
+<input type="range" id="lvolume" class="slider" onchange="inputEvent()"><BR>
+
+
+<input onClick="inputEvent()" type="checkbox" class="checkbox" id="metronomeOn" name="metronomeOn" value="0">
+METRONOME<BR>
+BPM:
+<input oninput="inputEvent()" type="text" class="text" id="metronomeBPM" name="metronomeBPM" value="60"\>
+<button onClick="metronomeUp()" class="button">+</button>
+<button onClick="metronomeDn()" class="button">-</button><BR>
+
+PRESET: 
+<input oninput="inputEvent()" type="text" class="text" id="metronomePreset1" name="metronomePreset1" value="60"\>
+<button onClick="applyPreset1()" class="button">APPLY</button>
+<button onClick="updatePreset1()" class="button">UPDATE</button><BR>
+PRESET: 
+<input oninput="inputEvent()" type="text" class="text" id="metronomePreset2" name="metronomePreset2" value="60"\>
+<button onClick="applyPreset2()" class="button">APPLY</button>
+<button onClick="updatePreset2()" class="button">UPDATE</button><BR>
+PRESET: 
+<input oninput="inputEvent()" type="text" class="text" id="metronomePreset3" name="metronomePreset3" value="60"\>
+<button onClick="applyPreset3()" class="button">APPLY</button>
+<button onClick="updatePreset3()" class="button">UPDATE</button><BR>
+PRESET: 
+<input oninput="inputEvent()" type="text" class="text" id="metronomePreset4" name="metronomePreset4" value="60"\>
+<button onClick="applyPreset4()" class="button">APPLY</button>
+<button onClick="updatePreset4()" class="button">UPDATE</button><BR>
+
+<input onClick="inputEvent()" type="checkbox" class="checkbox" id="reverbOn" name="reverbOn" value="0">
+REVERB<BR>
+
+<span id="status">
+<output id="filename"></output><BR>
+<output id="length"></output> RECORDED<BR>
+<output id="remane"></output> REMANEING<BR>
+</span>
+
+
+<span id="record">
+<IMG onClick="record()" SRC="record.png" BORDER=1 WIDTH=10%><P>
+</span>
+
+<div id="stop">
+<IMG onClick="stop()" SRC="stop.png" BORDER=1 WIDTH=10%><P>
+</div>
+</CENTER>
+
+debug=<output id="debug"></output><P>
+
+<script>
+
+
+
+// bind widgets
+var debug = document.getElementById("debug")
+var volume = document.getElementById("volume")
+var mvolume = document.getElementById("mvolume")
+var lvolume = document.getElementById("lvolume")
+var metronomeBPM = document.getElementById("metronomeBPM")
+var metronomePreset1 = document.getElementById("metronomePreset1")
+var metronomePreset2 = document.getElementById("metronomePreset2")
+var metronomePreset3 = document.getElementById("metronomePreset3")
+var metronomePreset4 = document.getElementById("metronomePreset4")
+var metronomeOn = document.getElementById("metronomeOn")
+var reverbOn = document.getElementById("reverbOn")
+var status = document.getElementById("status")
+var filename = document.getElementById("filename")
+var length = document.getElementById("length")
+var remane = document.getElementById("remane")
+var recordButton = document.getElementById("record")
+var stopButton = document.getElementById("stop")
+// set when the GUI has read values from the board
+var haveBoard = false
+// send new user input during the next polling & haveBoard is true
+var haveInput = false
+
+// start & stop recording
+var recordOn = false
+var inputState = ""
+var RIGHT_MARGIN = 20
+var FONT_MARGIN = 2
+var SAMPLERATE = 44100
+var MAX_BPM = 200
+var MIN_BPM = 30
+var totalPings = 0
+var totalSends = 0
+var totalResponses = 0
+var droppedResponses = 0
+var foo = 0
+
+stopButton.style.display = "none"
+//status.style.display = "none"
+resizeEvent()
+window.addEventListener("resize", resizeEvent, false)
+loadDefaults()
+setInterval(refresh, 1000);
+
+
+
+
+
+
+
+
+function inputEvent()
+{
+    console.log("inputEvent")
+    haveInput = true
+    inputState = ("00" + Math.floor(volume.value).toString(16)).substr(-2)
+    inputState += ("00" + Math.floor(mvolume.value).toString(16)).substr(-2)
+    inputState += ("00" + Math.floor(lvolume.value).toString(16)).substr(-2)
+
+    var BPMMask = Math.floor(parseInt(metronomeBPM.value))
+    inputState += ("00" + BPMMask.toString(16)).substr(-2)
+
+    var metronomeMask = metronomeOn.checked ? 0x1 : 0x0
+    inputState += ("00" + metronomeMask.toString(16)).substr(-2)
+
+    var reverbMask = reverbOn.checked ? 0x1 : 0x0
+    inputState += ("00" + reverbMask.toString(16)).substr(-2)
+
+    var recordMask = recordOn ? 0x1 : 0x00
+    inputState += ("00" + recordMask.toString(16)).substr(-2)
+
+    var preset1Value = Math.floor(parseInt(metronomePreset1.value))
+    var preset2Value = Math.floor(parseInt(metronomePreset2.value))
+    var preset3Value = Math.floor(parseInt(metronomePreset3.value))
+    var preset4Value = Math.floor(parseInt(metronomePreset4.value))
+    inputState += ("00" + preset1Value.toString(16)).substr(-2)
+    inputState += ("00" + preset2Value.toString(16)).substr(-2)
+    inputState += ("00" + preset3Value.toString(16)).substr(-2)
+    inputState += ("00" + preset4Value.toString(16)).substr(-2)
+}
+
+
+
+function record()
+{
+	console.log("record")
+	recordOn = true
+    updateRecord()
+    inputEvent()
+}
+
+
+function stop()
+{
+	console.log("stop")
+    recordOn = false
+    updateRecord()
+    inputEvent()
+}
+
+
+function metronomeUp()
+{
+    var bpm = parseInt(metronomeBPM.value)
+    bpm += 1
+    if(bpm > MAX_BPM)
+    {
+        bpm = MAX_BPM
+    }
+    metronomeBPM.value = bpm.toString()
+    inputEvent()
+}
+
+
+function metronomeDn()
+{
+    var bpm = parseInt(metronomeBPM.value)
+    bpm -= 1
+    if(bpm < MIN_BPM)
+    {
+        bpm = MIN_BPM
+    }
+    metronomeBPM.value = bpm.toString()
+    inputEvent()
+}
+
+function updatePreset1()
+{
+    metronomePreset1.value = metronomeBPM.value
+	setCookie("preset1", metronomePreset1.value)
+}
+
+function updatePreset2()
+{
+    metronomePreset2.value = metronomeBPM.value
+	setCookie("preset2", metronomePreset2.value)
+}
+
+function updatePreset3()
+{
+    metronomePreset3.value = metronomeBPM.value
+	setCookie("preset3", metronomePreset3.value)
+}
+
+function updatePreset4()
+{
+    metronomePreset4.value = metronomeBPM.value
+	setCookie("preset4", metronomePreset4.value)
+}
+
+function applyPreset1()
+{
+    metronomeBPM.value = metronomePreset1.value
+    inputEvent()
+}
+
+function applyPreset2()
+{
+    metronomeBPM.value = metronomePreset2.value
+    inputEvent()
+}
+
+function applyPreset3()
+{
+    metronomeBPM.value = metronomePreset3.value
+    inputEvent()
+}
+
+function applyPreset4()
+{
+    metronomeBPM.value = metronomePreset4.value
+    inputEvent()
+}
+
+// update the record button
+function updateRecord()
+{
+	if(recordOn && stopButton.style.display == "none")
+	{
+		recordButton.style.display = "none"
+		stopButton.style.display = "inline"
+	}
+	else
+	if(!recordOn && recordButton.style.display == "none")
+	{
+		recordButton.style.display = "inline"
+		stopButton.style.display = "none"
+	}
+
+}
+
+
+function drawLine(ctx, x1, y1, x2, y2)
+{
+	ctx.beginPath()
+	ctx.moveTo(x1, y1)
+	ctx.lineTo(x2, y2)
+	ctx.stroke()
+}
+
+function fillRect(ctx, x1, y1, x2, y2)
+{
+	ctx.beginPath()
+	ctx.moveTo(x1, y1)
+	ctx.lineTo(x2, y1)
+	ctx.lineTo(x2, y2)
+	ctx.lineTo(x1, y2)
+	ctx.fill()
+}
+
+function drawRect(ctx, x1, y1, x2, y2)
+{
+	ctx.beginPath()
+	ctx.moveTo(x1, y1)
+	ctx.lineTo(x2, y1)
+	ctx.lineTo(x2, y2)
+	ctx.lineTo(x1, y2)
+	ctx.stroke()
+}
+
+function pad(num, size) 
+{
+    var s = "000000000" + num
+    return s.substr(s.length - size)
+}
+
+
+var meterRefreshed = true
+function refresh()
+{
+	totalPings++
+	debug.innerHTML = totalPings + " " + totalSends + " " + totalResponses
+
+	if(meterRefreshed)
+	{
+		meterRefreshed = false
+		droppedResponses = 0
+		totalSends++
+
+		var http = new XMLHttpRequest()
+		http.onreadystatechange = function() {
+			if(http.readyState == 4)
+			{
+				totalResponses++
+				var response = http.responseText
+                var offset = 0
+console.log("refresh response=" + response)
+                var newVolume = parseInt(response.slice(offset, offset + 2), 16)
+                offset += 2
+                var newMVolume = parseInt(response.slice(offset, offset + 2), 16)
+                offset += 2
+                var newLVolume = parseInt(response.slice(offset, offset + 2), 16)
+                offset += 2
+                var newBPM = parseInt(response.slice(offset, offset + 2), 16)
+                offset += 2
+                var newMetronome = parseInt(response.slice(offset, offset + 2), 16)
+                offset += 2
+                var newReverb = parseInt(response.slice(offset, offset + 2), 16)
+                offset += 2
+                var newRecord = parseInt(response.slice(offset, offset + 2), 16)
+                offset += 2
+                var newPreset1 = parseInt(response.slice(offset, offset + 2), 16)
+                offset += 2
+                var newPreset2 = parseInt(response.slice(offset, offset + 2), 16)
+                offset += 2
+                var newPreset3 = parseInt(response.slice(offset, offset + 2), 16)
+                offset += 2
+                var newPreset4 = parseInt(response.slice(offset, offset + 2), 16)
+                offset += 2
+
+
+// update the widgets with board values
+                if(!haveBoard)
+                {
+                    if(newVolume != volume.value)
+                    {
+                        volume.value = newVolume
+                    }
+                    if(newMVolume != mvolume.value)
+                    {
+                        mvolume.value = newMVolume
+                    }
+                    if(newLVolume != lvolume.value)
+                    {
+                        lvolume.value = newLVolume
+                    }
+                    if(newBPM != parseInt(metronomeBPM.value))
+                    {
+                        metronomeBPM.value = newBPM.toString()
+                    }
+                    var oldMetronome = (metronomeOn.checked ? 0x1 : 0x0)
+                    if(newMetronome != oldMetronome)
+                    {
+                        metronomeOn.checked = (newMetronome == 1 ? true : false)
+                    }
+                    var oldReverb = (reverbOn.checked ? 0x1 : 0x0)
+                    if(newReverb != oldReverb)
+                    {
+                        reverbOn.checked = (newReverb == 1 ? true : false)
+                    }
+                    var oldRecord = (recordOn ? 0x1 : 0x0)
+                    if(newRecord != oldRecord)
+                    {
+                        recordOn = (newRecord == 1 ? true : false)
+                        updateRecord()
+                    }
+                    if(newPreset1 != parseInt(metronomePreset1.value))
+                    {
+                        metronomePreset1.value = newPreset1.toString()
+                    }
+                    if(newPreset2 != parseInt(metronomePreset2.value))
+                    {
+                        metronomePreset2.value = newPreset2.toString()
+                    }
+                    if(newPreset3 != parseInt(metronomePreset3.value))
+                    {
+                        metronomePreset3.value = newPreset3.toString()
+                    }
+                    if(newPreset4 != parseInt(metronomePreset4.value))
+                    {
+                        metronomePreset4.value = newPreset4.toString()
+                    }
+                    haveBoard = true
+                }
+                
+                
+                
+				var totalWritten = parseInt(response.slice(offset, offset + 8), 16)
+                offset += 8
+				var totalRemane = parseInt(response.slice(offset, offset + 8), 16)
+                offset += 8
+				var filenameIn = response.slice(offset)
+
+//console.log("refresh " + http.responseText + " totalWritten=" + totalWritten + " totalRemane=" + totalRemane)
+//console.log("filenameIn=" + filenameIn)
+
+
+
+				if(filename.innerHTML != filenameIn)
+				{
+					filename.innerHTML = filenameIn
+				}
+
+				var hours = Math.floor(totalWritten / 60 / 60)
+				var minutes = Math.floor((totalWritten / 60) % 60)
+				var seconds = Math.floor((totalWritten) % 60)
+				var writtenText = pad(hours, 2) + ":" + pad(minutes, 2) + ":" + pad(seconds, 2)
+
+				if(length.innerHTML != writtenText)
+				{
+					length.innerHTML = writtenText
+				}
+
+				hours = Math.floor(totalRemane / 60 / 60)
+				minutes = Math.floor((totalRemane / 60) % 60)
+				seconds = Math.floor((totalRemane) % 60)
+				var remaneText = pad(hours, 2) + ":" + pad(minutes, 2) + ":" + pad(seconds, 2)
+
+				if(remane.innerHTML != remaneText)
+				{
+					remane.innerHTML = remaneText
+				}
+
+//console.log("refresh text=" + http.responseText + " value=" + value + " max=" + max + " maxCounter=" + maxCounter)
+
+				meterRefreshed = true
+			}
+		}
+
+		var string = "update"
+
+// send user input to the board
+        if(haveInput && haveBoard)
+        {
+            string = string + "?input=" + inputState
+            haveInput = false
+        }
+
+
+		string = string + "?foo=" + foo
+		foo++
+
+		http.open("GET", string, true)
+		http.send()
+	}
+	else
+	{
+		droppedResponses++
+		if(droppedResponses > 10)
+		{
+			meterRefreshed = true
+		}
+	}
+}
+
+
+function resizeEvent()
+{
+	volume.width = window.innerWidth - RIGHT_MARGIN
+
+	refresh()
+}
+
+
+
+function setCookie(name, value) 
+{
+    var date = new Date()
+	var days = 60
+    date.setTime(date.getTime()+(days * 24 * 60 * 60 * 1000))
+    var expires = "; expires=" + date.toGMTString()
+	document.cookie = name + "=" + value + expires
+}
+
+function loadDefaults()
+{
+	var cookie = document.cookie.split(';')
+	for(var i = 0; i < cookie.length; i++)
+	{
+		cookie[i] = cookie[i].trim()
+		var row = cookie[i].split("=")
+	}
+}
+
+
+</script>

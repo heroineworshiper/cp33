@@ -60,6 +60,9 @@ ARM_BOOTLOADER_OBJS := \
 
 all: cp33.bin bootloader.bin recordcp33 passthrough
 
+piano: piano.c
+	$(GCC) -o piano piano.c $(USB_DIR)/libusb/.libs/libusb-1.0.a -I$(USB_DIR)/libusb -lrt -lpthread
+
 cp33.bin: $(ARM_OBJS)
 	$(GCC_ARM) -o cp33.elf \
 		$(ARM_OBJS) \
