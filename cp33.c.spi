@@ -68,7 +68,7 @@ void init_i2s()
 	SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
 	SPI_InitStructure.SPI_CRCPolynomial = 7;
 	SPI_Init(SPI3, &SPI_InitStructure);
-
+	
 
   	NVIC_InitTypeDef NVIC_InitStructure;
 	NVIC_InitStructure.NVIC_IRQChannel = SPI3_IRQn;

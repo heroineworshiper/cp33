@@ -185,7 +185,7 @@ struct libusb_transfer* in_urb[TOTAL_URBS];
 struct libusb_transfer* out_urb;
 unsigned char *out_buffer;
 unsigned char *in_buffer[TOTAL_URBS];
-int disconnected = 1;
+int usb_disconnected = 1;
 
 int total_bytes = 0;
 int total_errors = 0;
@@ -742,6 +742,15 @@ void set_params(snd_pcm_t *dsp,
 }
 
 
+void close_alsa()
+{
+	if(dsp_out)
+	{
+		snd_pcm_close(dsp_out);
+		dsp_out = 0;
+	}
+}
+
 
 int open_alsa()
 {
@@ -750,10 +759,12 @@ int open_alsa()
 		"hw:1", 
 		SND_PCM_STREAM_PLAYBACK, 
 		SND_PCM_NONBLOCK);
+
+
 	if(result < 0)
 	{
 		dsp_out = 0;
-		printf("open_alsa %d: %s\n", __LINE__, snd_strerror(result));
+//		printf("open_alsa %d: %s\n", __LINE__, snd_strerror(result));
 		return 1;
 	}
 
@@ -778,6 +789,7 @@ int open_alsa()
             __LINE__, 
             offset, 
             frames);
+        close_alsa();
         return 1;
     }
 
@@ -787,19 +799,9 @@ int open_alsa()
 	snd_pcm_mmap_commit(dsp_out, offset, FRAGMENT * TOTAL_FRAGMENTS);
 
 	snd_pcm_start(dsp_out);
-	
-    return result;
+    return 0;
 }
 
-
-void close_alsa()
-{
-	if(dsp_out)
-	{
-		snd_pcm_close(dsp_out);
-		dsp_out = 0;
-	}
-}
 
 
 // capture audio data from USB
@@ -888,7 +890,7 @@ static void in_callback(struct libusb_transfer *transfer)
     {
 // disconnected
         printf("in_callback %d disconnected\n", __LINE__);
-        disconnected = 1;
+        usb_disconnected = 1;
     }
     else
 	{
@@ -896,7 +898,7 @@ static void in_callback(struct libusb_transfer *transfer)
 		total_errors++;
 	}
 
-    if(!disconnected)
+    if(!usb_disconnected)
     {
     	libusb_submit_transfer(transfer);
     }
@@ -910,7 +912,36 @@ static void out_callback(struct libusb_transfer *transfer)
 	usb_write_ready = 1;
 }
 
+void set_speaker(int value)
+{
+    CLAMP(value, 0, 100);
+    int value2 = value * 197 / 100;
+    char string[TEXTLEN];
+    sprintf(string, "amixer -D hw:1 -c 1 set 'Speaker' unmute %d", value2);
+    system(string);
+}
 
+void set_line(int value)
+{
+    CLAMP(value, 0, 100);
+    int value2 = value * 8065 / 100;
+    char string[TEXTLEN];
+    sprintf(string, "amixer -D hw:1 -c 1 set 'Line' unmute playback %d", value2);
+    system(string);
+}
+
+
+void write_mixer()
+{
+    char string[TEXTLEN];
+    set_speaker(speaker_volume);
+    set_line(line_volume);
+    
+    sprintf(string, "amixer -D hw:1 -c 1 set 'PCM' unmute 65535");
+    system(string);
+    sprintf(string, "amixer -D hw:1 -c 1 set 'Mic' mute 0");
+    system(string);
+}
 
 void* playback_thread(void *ptr)
 {
@@ -926,14 +957,29 @@ void* playback_thread(void *ptr)
     {
         if(!dsp_out)
         {
-            printf("playback_thread %d: reopening\n", __LINE__);
+//            printf("playback_thread %d: reopening\n", __LINE__);
             sleep(1);
-            close_alsa();
             open_alsa();
+            if(dsp_out)
+            {
+                write_mixer();
+            }
             continue;
         }
 
+// test for disconnect
+        snd_pcm_status_t *status;
+        snd_pcm_status_malloc(&status);
+        snd_pcm_status(dsp_out, status);
+        int state = snd_pcm_status_get_state(status);
+        snd_pcm_status_free(status);
 
+        if(state == 0)
+        {
+            printf("playback_thread %d: disconnected\n", __LINE__);
+            close_alsa();
+            continue;
+        }
 
 // wait for playback to free up a fragment
 		int total_fds = snd_pcm_poll_descriptors_count(dsp_out);
@@ -944,7 +990,6 @@ void* playback_thread(void *ptr)
 		result = poll(fds_out, total_fds, -1);
 //printf("playback_thread %d total_fds=%d result=%d\n", __LINE__, total_fds, result);
 
-//        snd_pcm_wait(dsp_out, -1);
 
 		const snd_pcm_channel_area_t *areas_out;
 		snd_pcm_uframes_t offset_out, frames_out;
@@ -954,6 +999,7 @@ void* playback_thread(void *ptr)
 			&offset_out, 
 			&frames_out);
 //printf("playback_thread %d total_fds=%d result=%d\n", __LINE__, total_fds, result);
+//printf("playback_thread %d avail_out=%d\n", __LINE__, avail_out);
 
         if(avail_out < 0 && devh)
         {
@@ -1006,10 +1052,10 @@ void* playback_thread(void *ptr)
 
             if(!devh)
             {
-                if(!disconnected)
+                if(!usb_disconnected)
                 {
                     printf("playback_thread %d instrument not connected\n", __LINE__);
-                    disconnected = 1;
+                    usb_disconnected = 1;
                 }
                 sleep(1);
             }
@@ -1250,7 +1296,7 @@ int open_usb()
 {
     int result = 0;
     int i;
-    if(disconnected)
+    if(usb_disconnected)
     {
     // open USB input
 	    libusb_init(0);
@@ -1258,7 +1304,7 @@ int open_usb()
 	    devh = libusb_open_device_with_vid_pid(0, 0x04d8, 0x000b);
 	    if(!devh)
 	    {
-		    printf("open_usb: Couldn't find CP33\n");
+//		    printf("open_usb: Couldn't find CP33\n");
 		    return 1;
 	    }
 
@@ -1273,7 +1319,7 @@ int open_usb()
 
         if(devh)
         {
-            disconnected = 0;
+            usb_disconnected = 0;
 
             printf("open_usb %d: instrument connected\n", __LINE__);
 	        out_buffer[0] = I2S_FRAGMENT_SIZE & 0xff;
@@ -1311,35 +1357,6 @@ int open_usb()
     return 0;
 }
 
-void write_mixer()
-{
-    char string[TEXTLEN];
-    set_speaker(speaker_volume);
-    set_line(line_volume);
-    
-    sprintf(string, "amixer -D hw:1 -c 1 set 'PCM' unmute 65535");
-    system(string);
-    sprintf(string, "amixer -D hw:1 -c 1 set 'Mic' mute 0");
-    system(string);
-}
-
-void set_speaker(int value)
-{
-    CLAMP(value, 0, 100);
-    int value2 = value * 197 / 100;
-    char string[TEXTLEN];
-    sprintf(string, "amixer -D hw:1 -c 1 set 'Speaker' unmute %d", value2);
-    system(string);
-}
-
-void set_line(int value)
-{
-    CLAMP(value, 0, 100);
-    int value2 = value * 8065 / 100;
-    char string[TEXTLEN];
-    sprintf(string, "amixer -D hw:1 -c 1 set 'Line' unmute playback %d", value2);
-    system(string);
-}
 
 
 
@@ -1860,23 +1877,27 @@ int main(int argc, char *argv[])
 #endif
 
 // open audio output
-    if(open_alsa())
-    {
-        exit(1);
-    }
+    open_alsa();
 
-    write_mixer();
+    if(dsp_out)
+    {
+        write_mixer();
+    }
 	pthread_create(&tid, &attr, playback_thread, 0);
 
+    if(open_usb())
+    {
+        printf("main %d: instrument disconnected\n", __LINE__);
+    }
 
     while(1)
     {
-        if(disconnected)
+        if(usb_disconnected)
         {
             open_usb();
         }
 
-        while(!disconnected)
+        while(!usb_disconnected)
         {
     		libusb_handle_events(0);
         }
@@ -1887,7 +1908,7 @@ int main(int argc, char *argv[])
             libusb_close(devh);
             devh = 0;
         }
-printf("main %d\n", __LINE__);
+
 // sleep without USB
         sleep(1);
     }
