@@ -30,7 +30,7 @@
 // scp index.html piano:
 // scp piano.c pianoserver.c piano.h piano:
 // objcopy -B arm -I binary -O elf32-littlearm metro.wav metro.o
-// gcc -g -O3 -o piano piano.c pianoserver.c metro.o -lm -lrt -lpthread -lasound -lusb-1.0
+// gcc -O3 -o piano piano.c pianoserver.c metro.o -lm -lrt -lpthread -lasound -lusb-1.0 -D__USE_FILE_OFFSET64 -D__USE_LARGEFILE64
 
 #define _GNU_SOURCE
 #include <alsa/asoundlib.h>
@@ -70,17 +70,18 @@
 // number of bytes to send from the CP33 at a time.  Limited by settings.h
 #define I2S_FRAGMENT_SIZE (64 * CHANNELS * sizeof(int))
 
-
+// reread the directory.  Causes recording overruns.
+#define POLLING
 
 // reverb
 int do_reverb = 0;
 // in samples
 int reverb_len = SAMPLERATE;
-int reverb_refs = 128;
+int reverb_refs = 150;
 // DEBUG
 //int reverb_refs = 1;
-// delay before 1st reflection in addition to the FFT delay
-int reverb_delay1 = 0;
+// ms delay before 1st reflection in addition to the FFT delay
+int reverb_delay1 = 20;
 // 1st reflection level in DB
 float reverb_level1 = -24.0f;
 // DEBUG
@@ -111,8 +112,7 @@ float *filtered_output_i[CHANNELS];
 
 
 // recording
-//#define WAV_PATH "/wav/"
-#define WAV_PATH "/root/"
+#define WAV_PATH "/home/mpeg/"
 #define SETTINGS_PATH "/root/.pianorc"
 #define HEADER_SIZE 44
 char filename[TEXTLEN];
@@ -1357,16 +1357,94 @@ int open_usb()
     return 0;
 }
 
+// detect last filename & last file size.  Causes recording overrun.
+void calculate_dir()
+{
+// must not be writing a file
+    if(write_fd < 0)
+    {
+        int highest = -1;
+        char highest_filename[TEXTLEN];
+        char string[TEXTLEN];
+        sprintf(string, "ls -al %s*.wav", WAV_PATH);
+        FILE *fd = popen(string, "r");
+        
+        while(!feof(fd))
+        {
+            char *result = fgets(string, TEXTLEN, fd);
+            if(!result)
+            {
+                break;
+            }
+
+// get filename
+            char *ptr = strchr(string, '/');
+// get 1st numeric char
+            if(ptr)
+            {
+                char *ptr2 = ptr;
+                ptr++;
+                while(*ptr && (*ptr < '0' || *ptr > '9'))
+                {
+                    ptr++;
+                }
+                
+                if(ptr)
+                {
+                    int current = atoi(ptr);
+                    if(current > highest)
+                    {
+                        highest = current;
+                        strcpy(highest_filename, ptr2);
+// strip linefeed
+                        while(strlen(highest_filename) > 0 &&
+                            highest_filename[strlen(highest_filename) - 1] == '\n')
+                        {
+                            highest_filename[strlen(highest_filename) - 1] = 0;
+                        }
+                    }
+                }
+            }
+        }
+		fclose(fd);
+
+        if(highest >= 0)
+        {
+            struct stat64 ostat;
+			stat64(highest_filename, &ostat);
+        	pthread_mutex_lock(&www_mutex);
+			total_written = (ostat.st_size - HEADER_SIZE) / SAMPLESIZE;
+// printf("calculate_dir %d highest_filename=%s ostat.st_size=%d,%lld total_written=%lld\n",
+// __LINE__,
+// highest_filename,
+// sizeof(ostat.st_size),
+// ostat.st_size,
+// total_written);
+			strcpy(filename, highest_filename);
+            next_file = highest + 1;
+        	pthread_mutex_unlock(&www_mutex);
+        }
+        else
+        {
+        	pthread_mutex_lock(&www_mutex);
+            next_file = 0;
+            total_written = 0;
+            filename[0] = 0;
+        	pthread_mutex_unlock(&www_mutex);
+        }
+    }
+}
 
 
-
-// calculate remaneing space in samples
+// calculate remaneing space in samples.
 int64_t calculate_remane()
 {
 	FILE *fd = popen("df /", "r");
 	char buffer[TEXTLEN];
 	fgets(buffer, TEXTLEN, fd);
 	fgets(buffer, TEXTLEN, fd);
+    fclose(fd);
+
 	char *ptr = buffer;
 	int i;
 	for(i = 0; i < 3; i++)
@@ -1384,7 +1462,8 @@ int64_t calculate_remane()
 
 	int64_t remane = atol(ptr);
 //printf("calculate_remane %d remane=%lld\n", __LINE__, remane);
-	return remane * 1024LL / SAMPLESIZE;
+	remane = remane * 1024LL / SAMPLESIZE;
+    return remane;
 }
 
 
@@ -1439,6 +1518,7 @@ void flush_writer()
 
 	pthread_mutex_lock(&www_mutex);
 	total_written += size / SAMPLESIZE;
+    total_remane -= size / SAMPLESIZE;
 	pthread_mutex_unlock(&www_mutex);
 }
 
@@ -1463,7 +1543,10 @@ void file_writer(void *ptr)
 			{
 				close(write_fd);
 				write_fd = -1;
+				pthread_mutex_lock(&www_mutex);
 				recording = 0;
+				total_remane = calculate_remane();
+				pthread_mutex_unlock(&www_mutex);
 			}
 		}
 
@@ -1478,7 +1561,6 @@ void file_writer(void *ptr)
 			next_file++;
 			pthread_mutex_unlock(&www_mutex);
 
-			
 			write_fd = open64(filename, 
                 O_WRONLY | O_CREAT | O_DIRECT,
                 0777);
@@ -1496,13 +1578,12 @@ void file_writer(void *ptr)
                 flush_writer();
 
 				pthread_mutex_lock(&www_mutex);
-				total_remane = calculate_remane();
 				recording = 1;
 				total_written = 0;
+				total_remane = calculate_remane();
 				pthread_mutex_unlock(&www_mutex);
 
 			}
-
 		}
     }
 }
@@ -1676,6 +1757,7 @@ user_preset4);
 // fill response to GUI
 void handle_update(char *state)
 {
+//printf("handle_update %d total_written=%lld\n", __LINE__, total_written);
 	sprintf(state, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%08x%08x%s", 
         speaker_volume,
         metronome_level,
@@ -1689,7 +1771,8 @@ void handle_update(char *state)
         preset3,
         preset4,
 		(uint32_t)(total_written / SAMPLERATE), 
-		(uint32_t)((total_remane - total_written) / SAMPLERATE), 
+		(uint32_t)(total_remane / SAMPLERATE), 
+//		(uint32_t)((total_remane - total_written) / SAMPLERATE), 
 		filename);
 }
 
@@ -1813,6 +1896,9 @@ int main(int argc, char *argv[])
 
 
 // probe the last filename
+#ifdef POLLING
+    calculate_dir();
+#else
 	strcpy(filename, "");
 	for(next_file = 0; next_file < MAXFILES; next_file++)
 	{
@@ -1825,13 +1911,15 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
-			struct stat ostat;
-			stat(next_filename, &ostat);
+			struct stat64 ostat;
+			stat64(next_filename, &ostat);
 			total_written = (ostat.st_size - HEADER_SIZE) / SAMPLESIZE;
 			strcpy(filename, next_filename);
 			fclose(fd);
 		}
 	}
+#endif
+
 
 
 	total_remane = calculate_remane();
@@ -1911,6 +1999,12 @@ int main(int argc, char *argv[])
 
 // sleep without USB
         sleep(1);
+
+// reread directory only when disconnected
+#ifdef POLLING
+        calculate_dir();
+        total_remane = calculate_remane();
+#endif
     }
 
 
