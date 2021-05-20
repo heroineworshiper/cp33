@@ -31,6 +31,7 @@
 // scp piano.c pianoserver.c piano.h piano:
 // objcopy -B arm -I binary -O elf32-littlearm metro.wav metro.o
 // gcc -O3 -o piano piano.c pianoserver.c metro.o -lm -lrt -lpthread -lasound -lusb-1.0 -D__USE_FILE_OFFSET64 -D__USE_LARGEFILE64
+// nohup ./piano >& /dev/null&
 
 #define _GNU_SOURCE
 #include <alsa/asoundlib.h>
@@ -65,8 +66,8 @@
 #define TOTAL_URBS 256
 #define EP1_SIZE 0x40
 #define PLAYBACK_BUFFER 0x100000
-// multiple of SAMPLESIZE
-#define RECORD_BUFFER 0xffffc
+// multiple of SAMPLESIZE.  30 minute buffer
+#define RECORD_BUFFER (SAMPLESIZE * 44100 * 60 * 30)
 // number of bytes to send from the CP33 at a time.  Limited by settings.h
 #define I2S_FRAGMENT_SIZE (64 * CHANNELS * sizeof(int))
 
@@ -87,7 +88,7 @@ float reverb_level1 = -24.0f;
 // DEBUG
 //float reverb_level1 = 0.0f;
 // last reflection level in DB
-float reverb_level2 = -40.0f;
+float reverb_level2 = -46.0f;
 // lowpass cutoff in HZ
 int reverb_lowpass = 6000;
 
@@ -120,6 +121,7 @@ int next_file = 0;
 #define MAXFILES 99
 int64_t total_written = 0;
 int64_t total_remane = 0;
+int glitches = 0;
 int need_recording = 0;
 int need_stop = 0;
 int recording = 0;
@@ -814,11 +816,12 @@ static void in_callback(struct libusb_transfer *transfer)
 		int size = transfer->actual_length;
 		total_bytes += size;
 
-// truncate if FIFO is full
+// truncate if playback FIFO is full
 	    pthread_mutex_lock(&playback_fifo.lock);
         if(size + playback_fifo.size > playback_fifo.allocated)
         {
             size = playback_fifo.allocated - playback_fifo.size;
+            printf("in_callback %d: playback fifo full\n", __LINE__);
         }
 	    pthread_mutex_unlock(&playback_fifo.lock);
 
@@ -852,11 +855,16 @@ static void in_callback(struct libusb_transfer *transfer)
         {
             int samples = transfer->actual_length / CHANNELS / 4;
             
-// truncate if FIFO is full
+// truncate if record FIFO is full
 	        pthread_mutex_lock(&record_fifo.lock);
             if(samples * SAMPLESIZE + record_fifo.size > record_fifo.allocated)
             {
                 samples = (record_fifo.allocated - record_fifo.size) / SAMPLESIZE;
+                if(total_written > 0)
+                {
+                    printf("in_callback %d: record fifo full\n", __LINE__);
+                    glitches++;
+                }
             }
     	    pthread_mutex_unlock(&record_fifo.lock);
 
@@ -1004,6 +1012,10 @@ void* playback_thread(void *ptr)
         if(avail_out < 0 && devh)
         {
             printf("playback_thread %d: glitch\n", __LINE__);
+            if(recording && total_written > 0)
+            {
+                glitches++;
+            }
             close_alsa();
             open_alsa();
             continue;
@@ -1554,6 +1566,7 @@ void file_writer(void *ptr)
 		if(need_recording)
 		{
 			need_recording = 0;
+            glitches = 0;
 
 			pthread_mutex_lock(&www_mutex);
 // create a new file
@@ -1758,7 +1771,7 @@ user_preset4);
 void handle_update(char *state)
 {
 //printf("handle_update %d total_written=%lld\n", __LINE__, total_written);
-	sprintf(state, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%08x%08x%s", 
+	sprintf(state, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%08x%08x%08x%s", 
         speaker_volume,
         metronome_level,
         line_volume,
@@ -1772,7 +1785,7 @@ void handle_update(char *state)
         preset4,
 		(uint32_t)(total_written / SAMPLERATE), 
 		(uint32_t)(total_remane / SAMPLERATE), 
-//		(uint32_t)((total_remane - total_written) / SAMPLERATE), 
+        glitches,
 		filename);
 }
 

@@ -103,7 +103,7 @@ REVERB<BR>
 
 <span id="status">
 <output id="filename"></output><BR>
-<output id="length"></output> RECORDED<BR>
+<output id="length"></output> RECORDED <output id="glitches"></output> GLITCHES<BR>
 <output id="remane"></output> REMANEING<BR>
 </span>
 
@@ -138,6 +138,7 @@ var reverbOn = document.getElementById("reverbOn")
 var status = document.getElementById("status")
 var filename = document.getElementById("filename")
 var length = document.getElementById("length")
+var glitches = document.getElementById("glitches")
 var remane = document.getElementById("remane")
 var recordButton = document.getElementById("record")
 var stopButton = document.getElementById("stop")
@@ -454,9 +455,11 @@ console.log("refresh response=" + response)
                 offset += 8
 				var totalRemane = parseInt(response.slice(offset, offset + 8), 16)
                 offset += 8
+                var glitches_ = parseInt(response.slice(offset, offset + 8), 16)
+                offset += 8
 				var filenameIn = response.slice(offset)
 
-//console.log("refresh " + http.responseText + " totalWritten=" + totalWritten + " totalRemane=" + totalRemane)
+console.log("refresh " + http.responseText + " totalWritten=" + totalWritten + " totalRemane=" + totalRemane)
 //console.log("filenameIn=" + filenameIn)
 
 
@@ -485,6 +488,12 @@ console.log("refresh response=" + response)
 				{
 					remane.innerHTML = remaneText
 				}
+                
+                var glitchText = glitches_.toString()
+                if(glitches.innerHTML != glitchText)
+                {
+                    glitches.innerHTML = glitchText
+                }
 
 //console.log("refresh text=" + http.responseText + " value=" + value + " max=" + max + " maxCounter=" + maxCounter)
 
