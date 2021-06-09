@@ -40,3 +40,20 @@ Instructions for building are in cp33.c & piano.c
 
 
 
+
+
+
+
+lcd.FCStd: LCD stand
+    print with .8mm nozzle
+    no support when bridging over magnets
+
+
+
+
+
+
+
+
+
+
