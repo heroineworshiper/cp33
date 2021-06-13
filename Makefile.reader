@@ -1,0 +1,43 @@
+OBJDIR := $(shell uname --machine)
+CC := g++
+CXXFLAGS := -O3 -Iguicast
+
+ifeq ($(OBJDIR), x86_64)
+CXXFLAGS += -DUSE_WINDOW
+endif
+
+PNGS := \
+	images/button_up.png \
+	images/button_hi.png \
+	images/button_dn.png \
+	images/load.png
+
+OBJS := \
+	reader.o \
+	readertheme.o \
+	
+
+LIBS := \
+    guicast/$(OBJDIR)/libguicast.a \
+    -lX11 \
+    -lXext \
+    -lXv \
+    -lpthread \
+    -lm \
+    -lpng
+
+ifeq ($(OBJDIR), armv6l)
+LIBS += -lwiringPi
+endif
+
+reader: $(OBJS) theme_data.o
+	$(CC) -o reader $(OBJS) theme_data.o $(LIBS)
+
+theme_data.o:
+	guicast/$(OBJDIR)/bootstrap theme_data.o $(PNGS)
+
+%.o: %.c
+	$(CC) $(CXXFLAGS) -c $< -o $@
+
+clean:
+	rm -f reader reader.o readertheme.o theme_data.o

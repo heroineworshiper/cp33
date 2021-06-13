@@ -41,6 +41,57 @@ Instructions for building are in cp33.c & piano.c
 
 
 
+reader.c:
+Music display for dual raspberry pi's
+-----------------------------------------------------------------------------
+This requires configuring Xorg on the raspberry pi.
+
+Set up the framebuffer in /boot/config.txt by adding the following lines
+
+display_rotate=3
+framebuffer_depth=16
+framebuffer_width=768
+framebuffer_height=1366
+enable_uart=1
+
+Install fvwm
+
+apt install fvwm
+
+Copy /usr/share/fvwm/system.fvwm2rc from Ubuntu.
+Add a line to /usr/share/fvwm/system.fvwm2rc to disable the window border
+
+Style "Reader" NoTitle, HandleWidth 0
+
+Install missing fonts.  Copy 
+    /usr/share/fonts/X11/misc
+    /etc/X11/fonts/misc
+from Ubuntu
+
+
+Compile it on a raspberry:
+    apt install xorg
+    apt install libx11-dev
+    apt install libxext-dev
+    apt install libxv-dev
+    apt install wiringpi
+    make -f Makefile.reader
+    scp reader pi2:
+
+
+
+
+Run it on the client 1st:
+Xorg&
+export DISPLAY=:0
+./reader -c
+
+Run it on the server 2nd:
+xinit /usr/bin/fvwm2&
+export DISPLAY=:0
+./reader
+
+
 
 
 
@@ -48,7 +99,8 @@ lcd.FCStd: LCD stand
     print with .8mm nozzle
     no support when bridging over magnets
 
-
+    TODO: captive nuts for all farsteners
+        shorter nuts for latches
 
 
 
