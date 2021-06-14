@@ -216,6 +216,15 @@ BC_Window* LoadFileThread::new_gui()
 //         y = 0;
 //     }
 
+    if(mwindow->get_resources()->filebox_w > mwindow->root_w)
+    {
+        mwindow->get_resources()->filebox_w = mwindow->root_w;
+    }
+    if(mwindow->get_resources()->filebox_h > mwindow->root_h)
+    {
+        mwindow->get_resources()->filebox_h = mwindow->root_h;
+    }
+
 	gui = new LoadFileWindow(mwindow, /* x, y,*/ 0, 0, default_path);
     gui->get_filters()->remove_all_objects();
     gui->get_filters()->append(new BC_ListBoxItem("*.reader"));
@@ -384,7 +393,12 @@ void ManeWindow::create_objects()
         0); // group_it
     root_w = get_w();
     root_h = get_h();
-//    set_cursor(TRANSPARENT_CURSOR, 0, 0);
+    if(client_mode)
+    {
+printf("ManeWindow::create_objects %d\n", __LINE__);
+
+        set_cursor(TRANSPARENT_CURSOR, 0, 0);
+    }
 // draw bitmaps to the foreground/win instead of the back buffer/pixmap
 #ifndef BG_PIXMAP
 
@@ -595,6 +609,13 @@ int ManeWindow::button_release_event()
     menu->gui->unlock_window();
 
 
+    if(load->is_running())
+    {
+        load->lock_gui("ManeWindow::button_release_event");
+        load->gui->raise_window(1);
+        load->unlock_gui();
+    }
+    else
     if(menu->gui->get_hidden())
     {
 // show the menu
@@ -615,13 +636,6 @@ int ManeWindow::button_release_event()
         menu->gui->reposition_window(x, y);
         menu->gui->raise_window(1);
         menu->gui->unlock_window();
-
-        if(load->is_running())
-        {
-            load->lock_gui("ManeWindow::button_release_event");
-            load->gui->raise_window(1);
-            load->unlock_gui();
-        }
 
     }
 
@@ -1107,14 +1121,11 @@ int main(int argc, char *argv[])
     int i, j, k;
 
 
-//    init_fb();
-    mwindow.create_objects();
 
 	pthread_t tid;
 	pthread_attr_t  attr;
 	pthread_attr_init(&attr);
 
-    int do_client = 0;
     char *path = 0;
 // load the image file
     if(argc > 1)
@@ -1122,7 +1133,7 @@ int main(int argc, char *argv[])
         if(!strcmp(argv[1], "-c"))
         {
 // start in client mode without loading a file
-            do_client = 1;
+            client_mode = 1;
         }
         else
         {
@@ -1130,7 +1141,10 @@ int main(int argc, char *argv[])
         }
     }
 
-    if(!do_client)
+//    init_fb();
+    mwindow.create_objects();
+
+    if(!client_mode)
     {
         printf("Starting network server\n");
         sem_init(&command_ready, 0, 0);
@@ -1156,7 +1170,6 @@ int main(int argc, char *argv[])
 // start the client
     {
         printf("Starting network client\n");
-        client_mode = 1;
         pthread_create(&tid, &attr, client_thread, 0);
     }
 

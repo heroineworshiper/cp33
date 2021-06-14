@@ -18,7 +18,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 ******************************************************************************
 
-This program adds outboard metronome, reverb, & recording to a dumb CP33.
+This program adds outboard metronome, reverb, & recording to a dumb
+electric piano with I2S audio exposed somewhere.
 
 
 What you'll find here:
@@ -54,6 +55,48 @@ framebuffer_width=768
 framebuffer_height=1366
 enable_uart=1
 
+
+Configure Xorg to disable screen blanking & the default mouse events.
+Edit /usr/share/X11/xorg.conf.d/99-fbturbo.conf
+
+------------------------------------------------------------------------------
+Section "Device"
+        Identifier      "fb"
+        Driver          "fbturbo"
+        Option          "fbdev" "/dev/fb0"
+
+        Option          "SwapbuffersWait" "true"
+EndSection
+
+
+Section "Monitor"
+	# This identifier would be the same as the name
+	# of the connector printed by xrander.
+	Identifier	"VGA1"
+    Option "DPMS" "false"
+    Option "StandbyTime" "0"
+    Option "SuspendTime" "0"
+    Option "OffTime" "0"
+    Option "BlankTime" "0"
+EndSection
+
+
+Section "Screen"
+	Identifier	"ScreenLeft"
+	Device		"fb"
+	Monitor		"VGA1"
+EndSection
+
+Section "ServerFlags"
+    Option "StandbyTime" "0"
+    Option "SuspendTime" "0"
+    Option "OffTime" "0"
+    Option "BlankTime" "0"
+EndSection
+
+
+
+----------------------------------------------------------------------
 Install fvwm
 
 apt install fvwm
@@ -73,8 +116,12 @@ Compile it on a raspberry:
     apt install xorg
     apt install libx11-dev
     apt install libxext-dev
+    apt install libxfixes-dev
     apt install libxv-dev
+    apt install libxft-dev
     apt install wiringpi
+    apt install xinput
+    make -C guicast
     make -f Makefile.reader
     scp reader pi2:
 
@@ -89,6 +136,9 @@ export DISPLAY=:0
 Run it on the server 2nd:
 xinit /usr/bin/fvwm2&
 export DISPLAY=:0
+xinput
+xinput --list-props "PixArt USB Optical Mouse"
+xinput --set-prop "PixArt USB Optical Mouse" "libinput Accel Speed" -1
 ./reader
 
 

@@ -22,6 +22,7 @@ LIBS := \
     -lX11 \
     -lXext \
     -lXv \
+    -lXft \
     -lpthread \
     -lm \
     -lpng
