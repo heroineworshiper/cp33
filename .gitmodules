@@ -1,0 +1,3 @@
+[submodule "guicast"]
+	path = guicast
+	url = https://github.com/heroineworshiper/guicast
