@@ -2,67 +2,57 @@
 #define READER_H
 
 
-
+#include "guicast.h"
 #include "reader.inc"
 
 
 
+// enable 2 page mode using the client
+#ifndef USE_WINDOW
+#define TWO_PAGE
+#endif // USE_WINDOW
+
+#define ROOT_W 768
+#define ROOT_H 1366
 
 
-class LoadFileWindow : public BC_FileBox
+// use double buffering
+#define BG_PIXMAP
+
+#define CLIENT_ADDRESS "pi2"
+#define CLIENT_PORT 1234
+#define PACKET_SIZE 1024
+// timeout in ms
+//#define TIMEOUT 1000
+#define TIMEOUT 1000
+#define RETRIES 5
+
+// command IDs
+#define LOAD_FILE 0
+#define SHOW_PAGE 1
+
+// button GPIOs
+#define UP_GPIO 14
+#define DOWN_GPIO 13
+#define DEBOUNCE 1
+#define BUTTON_HZ 60
+#define REPEAT1 (BUTTON_HZ / 2)
+// as fast as the drawing routine
+#define REPEAT2 (1)
+
+
+
+int load_file(char *path);
+void load_file_entry(char *path);
+int send_command(int id, uint8_t *value, int value_size);
+int wait_command();
+void prev_page();
+void next_page();
+
+class MWindow : public BC_Window
 {
 public:
-	LoadFileWindow(ManeWindow *mwindow, int x, int y, char *path);
-
-	ManeWindow *mwindow;
-};
-
-
-class LoadFileThread : public BC_DialogThread
-{
-public:
-	LoadFileThread(ManeWindow *mwindow);
-    BC_Window* new_gui();
-    void handle_done_event(int result);
-	ManeWindow *mwindow;
-    LoadFileWindow *gui;
-};
-
-class LoadFile : public BC_Button
-{
-public:
-    LoadFile(ManeWindow *mwindow, int x, int y);
-    int handle_event();
-    ManeWindow *mwindow;
-};
-
-class MenuWindow : public BC_Window
-{
-public:
-    MenuWindow(ManeWindow *mwindow);
-    void create_objects();
-    int close_event();
-
-
-    ManeWindow *mwindow;
-};
-
-
-
-class MenuThread: public Thread
-{
-public:
-    MenuThread(ManeWindow *mwindow);
-    void create_objects();
-    void run();
-    ManeWindow *mwindow;
-    MenuWindow *gui;
-};
-
-class ManeWindow : public BC_Window
-{
-public:
-    ManeWindow();
+    MWindow();
     
     void create_objects();
     void show_page(int number);
@@ -73,10 +63,24 @@ public:
 
     int root_w;
     int root_h;
+    int current_page;
+// the current layer
+    int is_top;
+// index of color in table
+    uint32_t top_color;
+    uint32_t bottom_color;
+    int brush_size;
+    int is_hollow;
+    
+    
     MenuThread *menu;
     LoadFileThread *load;
     ReaderTheme *theme;
     BC_Hash *defaults;
+    static MWindow *mwindow;
+    
+    static const uint32_t top_colors[TOTAL_COLORS];
+    static const uint32_t bottom_colors[TOTAL_COLORS];
 };
 
 

@@ -41,7 +41,7 @@
 // make -f Makefile.reader
 // scp reader pi2:
 
-
+#include "clip.h"
 #include "guicast.h"
 #include "cursors.h"
 #include "keys.h"
@@ -65,40 +65,8 @@
 
 
 #include "reader.h"
+#include "readermenu.h"
 #include "readertheme.h"
-
-// enable 2 page mode using the client
-#ifndef USE_WINDOW
-#define TWO_PAGE
-#endif // USE_WINDOW
-
-#define ROOT_W 768
-#define ROOT_H 1366
-
-// use double buffering
-#define BG_PIXMAP
-
-#define CLIENT_ADDRESS "pi2"
-#define CLIENT_PORT 1234
-#define PACKET_SIZE 1024
-// timeout in ms
-//#define TIMEOUT 1000
-#define TIMEOUT 1000
-#define RETRIES 5
-
-// command IDs
-#define LOAD_FILE 0
-#define SHOW_PAGE 1
-
-// button GPIOs
-#define UP_GPIO 14
-#define DOWN_GPIO 13
-#define DEBOUNCE 1
-#define BUTTON_HZ 60
-#define REPEAT1 (BUTTON_HZ / 2)
-// as fast as the drawing routine
-#define REPEAT2 (1)
-
 typedef struct
 {
     int accum;
@@ -109,7 +77,6 @@ typedef struct
 } button_state_t;
 button_state_t up_button;
 button_state_t down_button;
-int current_page = 0;
 
 // network
 uint8_t packet[PACKET_SIZE];
@@ -131,15 +98,28 @@ char *fbp = 0;
 
 
 
-ManeWindow mwindow;
+MWindow* MWindow::mwindow = 0;
+const uint32_t MWindow::top_colors[TOTAL_COLORS] = 
+{
+    0x000000, // black
+    0x808080, // grey
+    0xff0000, // red
+    0xcc44cc, // purple
+    0x00ff00, // green
+    0x0000ff, // blue
+    0x664400, // brown
+};
 
-int load_file(char *path);
-void load_file_entry(char *path);
-int send_command(int id, uint8_t *value, int value_size);
-int wait_command();
-void prev_page();
-void next_page();
-
+const uint32_t MWindow::bottom_colors[TOTAL_COLORS] = 
+{
+    0xeeee77, // yellow
+    0xbbbbbb, // light grey
+    0xff7777, // light red
+    0xaaffee, // cyan
+    0xaaff66, // light green
+    0x0088ff, // light blue
+    0xdd8855, // orange
+};
 
 
 class Page
@@ -168,202 +148,34 @@ ArrayList<Page*> pages;
 
 
 
-LoadFileWindow::LoadFileWindow(ManeWindow *mwindow, int x, int y, char *path)
- : BC_FileBox(x, //x
-    y, // y
-    path, // init_path
-    "Load file", // title
-    "Select a file to load") // caption
+
+
+MWindow::MWindow() : BC_Window()
 {
-    this->mwindow = mwindow;
-}
+    current_page = 0;
 
-
-
-
-
-
-LoadFileThread::LoadFileThread(ManeWindow *mwindow)
- : BC_DialogThread()
-{
-	this->mwindow = mwindow;
-}
-
-BC_Window* LoadFileThread::new_gui()
-{
-	char default_path[BCTEXTLEN];
-
-	sprintf(default_path, "~");
-	mwindow->defaults->get("DEFAULT_LOADPATH", default_path);
-
-//     int x = mwindow->get_abs_cursor_x(1);
-//     int y = mwindow->get_abs_cursor_y(1);
-// 
-//     if(x + mwindow->get_resources()->filebox_w > mwindow->root_w)
-//     {
-//         x = mwindow->root_w - mwindow->get_resources()->filebox_w;
-//     }
-//     if(y + mwindow->get_resources()->filebox_h > mwindow->root_h)
-//     {
-//         y = mwindow->root_h - mwindow->get_resources()->filebox_h;
-//     }
-//     if(x < 0)
-//     {
-//         x = 0;
-//     }
-//     if(y < 0)
-//     {
-//         y = 0;
-//     }
-
-    if(mwindow->get_resources()->filebox_w > mwindow->root_w)
-    {
-        mwindow->get_resources()->filebox_w = mwindow->root_w;
-    }
-    if(mwindow->get_resources()->filebox_h > mwindow->root_h)
-    {
-        mwindow->get_resources()->filebox_h = mwindow->root_h;
-    }
-
-	gui = new LoadFileWindow(mwindow, /* x, y,*/ 0, 0, default_path);
-    gui->get_filters()->remove_all_objects();
-    gui->get_filters()->append(new BC_ListBoxItem("*.reader"));
-
-	gui->create_objects();
-	return gui;
-}
-
-void LoadFileThread::handle_done_event(int result)
-{
-// printf("LoadFileThread::handle_done_event %d result=%d path=%s\n", 
-// __LINE__, 
-// result,
-// gui->get_submitted_path());
-    gui->lock_window();
-    gui->hide_window();
-    gui->unlock_window();
-
-    mwindow->defaults->update("DEFAULT_LOADPATH", gui->get_submitted_path());
-    mwindow->save_defaults();
-    
-    if(result == 0)
-    {
-        ::load_file_entry(gui->get_submitted_path());
-    }
-    else
-    {
-#ifndef BG_PIXMAP
-// refresh background
-        mwindow->show_page(current_page);
-#endif
-    }
-}
-
-
-
-
-LoadFile::LoadFile(ManeWindow *mwindow, int x, int y)
- : BC_Button(x, y, mwindow->theme->get_image_set("load"))
-{
-    this->mwindow = mwindow;
-    set_tooltip("Load file...");
-}
-
-int LoadFile::handle_event()
-{
-    unlock_window();
-    mwindow->menu->gui->lock_window();
-    mwindow->menu->gui->hide_window();
-    mwindow->menu->gui->unlock_window();
-    mwindow->load->start();
-    
-    lock_window();
-    return 1;
-}
-
-
-#define MENU_W DP(100)
-#define MENU_H DP(100) 
-
-MenuWindow::MenuWindow(ManeWindow *mwindow)
- : BC_Window("Menu", 
-//	mwindow->get_x() + mwindow->get_w() / 2 - MENU_W / 2,
-//	mwindow->get_y() + mwindow->get_h() / 2 - MENU_H / 2,
-    0,
-    0,
-	mwindow->theme->get_image_set("load")[0]->get_w() * 4 + 
-        mwindow->theme->margin * 2, 
-	mwindow->theme->get_image_set("load")[0]->get_h() + 
-        mwindow->theme->margin * 2,
-    -1,
-    -1,
-    0,
-    0,
-    1, // hide
-    WHITE) // bg_color
-{
-    this->mwindow = mwindow;
-}
-
-
-void MenuWindow::create_objects()
-{
-    int margin = mwindow->theme->margin;
-    int x = mwindow->theme->margin;
-    int y = mwindow->theme->margin;
-    add_tool(new LoadFile(mwindow, x, y));
-}
-
-int MenuWindow::close_event()
-{
-//     mwindow->lock_window();
-//     mwindow->set_cursor(TRANSPARENT_CURSOR, 0, 1);
-//     mwindow->unlock_window();
-
-    hide_window();
-
-#ifndef BG_PIXMAP
-// refresh
-    mwindow->show_page(current_page);
-#endif
-    return 1;
-}
-
-
-
-
-MenuThread::MenuThread(ManeWindow *mwindow)
- : Thread()
-{
-	this->mwindow = mwindow;
-}
-
-void MenuThread::create_objects()
-{
-	gui = new MenuWindow(mwindow);
-    gui->create_objects();
-}
-
-void MenuThread::run()
-{
-    gui->run_window();
-}
-
-
-
-ManeWindow::ManeWindow() : BC_Window()
-{
 //#ifndef USE_WINDOW
 //    set_border(0);
 //#endif
 };
 
     
-void ManeWindow::create_objects()
+void MWindow::create_objects()
 {
 	defaults = new BC_Hash("~/.readerrc");
 	defaults->load();
     BC_WindowBase::load_defaults(defaults);
+    
+    is_top = defaults->get("IS_TOP", 0);
+    is_hollow = defaults->get("IS_HOLLOW", 0);
+    top_color = defaults->get("TOP_COLOR", 0);
+    bottom_color = defaults->get("BOTTOM_COLOR", 0);
+    brush_size = defaults->get("BRUSH_SIZE", 1);
+    CLAMP(top_color, 0, TOTAL_COLORS - 1);
+    CLAMP(bottom_color, 0, TOTAL_COLORS - 1);
+    CLAMP(brush_size, 1, MAX_BRUSH);
+
+    
     if(get_resources()->filebox_w > ROOT_W)
     {
         get_resources()->filebox_w = ROOT_W;
@@ -395,7 +207,6 @@ void ManeWindow::create_objects()
     root_h = get_h();
     if(client_mode)
     {
-printf("ManeWindow::create_objects %d\n", __LINE__);
 
         set_cursor(TRANSPARENT_CURSOR, 0, 0);
     }
@@ -409,21 +220,26 @@ printf("ManeWindow::create_objects %d\n", __LINE__);
 
     show_window(1);
 
-    menu = new MenuThread(this);
+    menu = new MenuThread;
     menu->create_objects();
     menu->start();
     
-    load = new LoadFileThread(this);
-//    printf("ManeWindow::create_objects %d color_model=%d\n", __LINE__, get_color_model());
+    load = new LoadFileThread;
+//    printf("MWindow::create_objects %d color_model=%d\n", __LINE__, get_color_model());
 }
 
-void ManeWindow::save_defaults()
+void MWindow::save_defaults()
 {
     BC_WindowBase::save_defaults(defaults);
+    defaults->update("IS_TOP", is_top);
+    defaults->update("IS_HOLLOW", is_hollow);
+    defaults->update("TOP_COLOR", (int32_t)top_color);
+    defaults->update("BOTTOM_COLOR", (int32_t)bottom_color);
+    defaults->update("BRUSH_SIZE", (int32_t)brush_size);
     defaults->save();
 }
 
-void ManeWindow::show_error(char *text)
+void MWindow::show_error(char *text)
 {
     lock_window();
     clear_box(0, 0, root_w, root_h, 0);
@@ -434,7 +250,7 @@ void ManeWindow::show_error(char *text)
     flash();
     unlock_window();
 }
-void ManeWindow::show_page(int number)
+void MWindow::show_page(int number)
 {
     if(number >= pages.size())
     {
@@ -451,7 +267,7 @@ void ManeWindow::show_page(int number)
     BC_Bitmap *bitmap = get_temp_bitmap(root_w,
         root_h,
         get_color_model());
-//printf("ManeWindow::show_page %d color_model=%d\n", __LINE__, get_color_model());
+//printf("MWindow::show_page %d color_model=%d\n", __LINE__, get_color_model());
 
 // convert to display color model
     switch(get_color_model())
@@ -546,7 +362,7 @@ void ManeWindow::show_page(int number)
         default:
             if(get_color_model() != BC_BGR8888)
             {
-                printf("ManeWindow::show_page %d unknown color model %d\n",
+                printf("MWindow::show_page %d unknown color model %d\n",
                     __LINE__,
                     get_color_model());
             }
@@ -561,7 +377,7 @@ void ManeWindow::show_page(int number)
 }
 
 
-int ManeWindow::keypress_event()
+int MWindow::keypress_event()
 {
     switch(get_keypress())
     {
@@ -581,21 +397,21 @@ int ManeWindow::keypress_event()
     return 1;
 }
 
-int ManeWindow::button_release_event()
+int MWindow::button_release_event()
 {
 //    set_cursor(ARROW_CURSOR, 0, 1);
     int x = get_abs_cursor_x(0);
     int y = get_abs_cursor_y(0);
     unlock_window();
 
-    menu->gui->lock_window();
-    if(x + menu->gui->get_w() > root_w)
+    MenuWindow::menu_window->lock_window();
+    if(x + MenuWindow::menu_window->get_w() > root_w)
     {
-        x = root_w - menu->gui->get_w();
+        x = root_w - MenuWindow::menu_window->get_w();
     }
-    if(y + menu->gui->get_h() > root_h)
+    if(y + MenuWindow::menu_window->get_h() > root_h)
     {
-        y = root_h - menu->gui->get_h();
+        y = root_h - MenuWindow::menu_window->get_h();
     }
     if(x < 0)
     {
@@ -606,12 +422,12 @@ int ManeWindow::button_release_event()
     {
         y = 0;
     }
-    menu->gui->unlock_window();
+    MenuWindow::menu_window->unlock_window();
 
 
     if(load->is_running())
     {
-        load->lock_gui("ManeWindow::button_release_event");
+        load->lock_gui("MWindow::button_release_event");
         load->gui->raise_window(1);
         load->unlock_gui();
     }
@@ -619,10 +435,12 @@ int ManeWindow::button_release_event()
     if(menu->gui->get_hidden())
     {
 // show the menu
-//printf("ManeWindow::button_release_event %d %d %d\n", __LINE__, x, y);
+//printf("MWindow::button_release_event %d %d %d\n", __LINE__, x, y);
         
         menu->gui->lock_window();
         menu->gui->show_window();
+// have to rehide buttons after show_window
+        menu->gui->update_buttons();
 // have to reposition after showing
         menu->gui->reposition_window(x, y);
         menu->gui->raise_window(1);
@@ -630,12 +448,13 @@ int ManeWindow::button_release_event()
     }
     else
     {
-//printf("ManeWindow::button_release_event %d\n", __LINE__);
-// raise the windows
-        menu->gui->lock_window();
-        menu->gui->reposition_window(x, y);
-        menu->gui->raise_window(1);
-        menu->gui->unlock_window();
+//printf("MWindow::button_release_event %d\n", __LINE__);
+// close all the windows
+        MenuWindow::menu_window->lock_window();
+        MenuWindow::menu_window->hide_windows(0);
+//        MenuWindow::menu_window->reposition_window(x, y);
+//        MenuWindow::menu_window->raise_window(1);
+        MenuWindow::menu_window->unlock_window();
 
     }
 
@@ -648,19 +467,19 @@ void next_page()
 {
 //    printf("next_page %d\n", __LINE__);
 #ifdef TWO_PAGE
-    if(current_page < pages.size() - 2)
+    if(MWindow::mwindow->current_page < pages.size() - 2)
     {
-        current_page += 2;
-        int temp = current_page + 1;
+        MWindow::mwindow->current_page += 2;
+        int temp = MWindow::mwindow->current_page + 1;
         send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
-        mwindow.show_page(current_page);
+        MWindow::mwindow->show_page(MWindow::mwindow->current_page);
         wait_command();
     }
 #else
-    if(current_page < pages.size() - 1)
+    if(MWindow::mwindow->current_page < pages.size() - 1)
     {
-        current_page++;
-        mwindow.show_page(current_page);
+        MWindow::mwindow->current_page++;
+        MWindow::mwindow->show_page(MWindow::mwindow->current_page);
     }
 #endif
 }
@@ -668,17 +487,17 @@ void next_page()
 void prev_page()
 {
 //    printf("prev_page %d\n", __LINE__);
-    if(current_page > 0)
+    if(MWindow::mwindow->current_page > 0)
     {
 #ifdef TWO_PAGE
-        current_page -= 2;
-        int temp = current_page + 1;
+        MWindow::mwindow->current_page -= 2;
+        int temp = MWindow::mwindow->current_page + 1;
         send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
-        mwindow.show_page(current_page);
+        MWindow::mwindow->show_page(MWindow::mwindow->current_page);
         wait_command();
 #else
-        current_page--;
-        mwindow.show_page(current_page);
+        MWindow::mwindow->current_page--;
+        MWindow::mwindow->show_page(MWindow::mwindow->current_page);
 #endif
     }
 }
@@ -880,11 +699,11 @@ void* client_thread(void *ptr)
                 result = load_file((char*)(packet + 1));
                 break;
             case SHOW_PAGE:
-                current_page = (uint32_t)packet[1] |
+                MWindow::mwindow->current_page = (uint32_t)packet[1] |
                     (((uint32_t)packet[2]) << 8) |
                     (((uint32_t)packet[3]) << 16) |
                     (((uint32_t)packet[4]) << 24);
-                mwindow.show_page(current_page);
+                MWindow::mwindow->show_page(MWindow::mwindow->current_page);
                 result = 0;
                 break;
         }
@@ -1037,11 +856,11 @@ int load_file(char *path)
     pages.remove_all_objects();
     if(client_mode)
     {
-        current_page = 1;
+        MWindow::mwindow->current_page = 1;
     }
     else
     {
-        current_page = 0;
+        MWindow::mwindow->current_page = 0;
     }
 
     FILE *src_fd = fopen(path, "r");
@@ -1050,7 +869,7 @@ int load_file(char *path)
         char string[BCTEXTLEN];
         sprintf(string, "Couldn't load:\n%s", path);
         printf("load_file %d: couldn't open image file %s\n", __LINE__, path);
-        mwindow.show_error(string);
+        MWindow::mwindow->show_error(string);
         return 1;
     }
 
@@ -1064,15 +883,15 @@ int load_file(char *path)
 
 
 // reject the content if the size differs
-    if(src_w != mwindow.root_w ||
-        src_h != mwindow.root_h)
+    if(src_w != MWindow::mwindow->root_w ||
+        src_h != MWindow::mwindow->root_h)
     {
         printf("main %d Source & screen have different dimensions\n", __LINE__);
         printf("source=%dx%d screen=%dx%d\n", 
             src_w, 
             src_h, 
-            mwindow.root_w, 
-            mwindow.root_h);
+            MWindow::mwindow->root_w, 
+            MWindow::mwindow->root_h);
         fclose(src_fd);
         return 1;
     }
@@ -1098,7 +917,7 @@ int load_file(char *path)
     fclose(src_fd);
 
 // show page 1
-    mwindow.show_page(current_page);
+    MWindow::mwindow->show_page(MWindow::mwindow->current_page);
     return 0;
 }
 
@@ -1142,7 +961,10 @@ int main(int argc, char *argv[])
     }
 
 //    init_fb();
-    mwindow.create_objects();
+    BC_Resources::dpi = BASE_DPI;
+    BC_Resources::override_dpi = 1;
+    MWindow::mwindow = new MWindow;
+    MWindow::mwindow->create_objects();
 
     if(!client_mode)
     {
@@ -1187,10 +1009,10 @@ int main(int argc, char *argv[])
 // #ifdef TWO_PAGE
 //         int temp = i + 1;
 //         send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
-//         mwindow.show_page(i);
+//         MWindow::mwindow->show_page(i);
 //         wait_command();
 // #else
-//         mwindow.show_page(i);
+//         MWindow::mwindow->show_page(i);
 // #endif
 //         i++;
 //         page_count++;
@@ -1206,7 +1028,8 @@ int main(int argc, char *argv[])
 //         }
 //     }
 
-    mwindow.run_window();
+    MWindow::mwindow->run_window();
+    MWindow::mwindow->save_defaults();
     return 0;
 }
 

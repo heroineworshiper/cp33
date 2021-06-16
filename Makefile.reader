@@ -10,10 +10,27 @@ PNGS := \
 	images/button_up.png \
 	images/button_hi.png \
 	images/button_dn.png \
-	images/load.png
+	images/load.png \
+    images/redo.png \
+    images/undo.png \
+    images/prev_page.png \
+    images/next_page.png \
+    images/hollow_brush.png \
+    images/filled_brush.png \
+    images/check.png \
+    images/check_hi.png \
+    images/save.png \
+    images/erase.png \
+    images/bottom_layer.png \
+    images/top_layer.png \
+    images/color.png \
+    images/draw.png \
+    images/palette_bg.png
+
 
 OBJS := \
 	reader.o \
+    readermenu.o \
 	readertheme.o \
 	
 
@@ -31,7 +48,7 @@ ifeq ($(OBJDIR), armv6l)
 LIBS += -lwiringPi
 endif
 
-reader: $(OBJS) theme_data.o
+reader: $(OBJS) theme_data.o guicast/$(OBJDIR)/libguicast.a
 	$(CC) -o reader $(OBJS) theme_data.o $(LIBS)
 
 theme_data.o:
@@ -41,4 +58,4 @@ theme_data.o:
 	$(CC) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f reader reader.o readertheme.o theme_data.o
+	rm -f reader *.o
