@@ -18,29 +18,34 @@
  * 
  */
 
-#ifndef READERTHEME_H
-#define READERTHEME_H
+#ifndef READERBRUSHES_H
+#define READERBRUSHES_H
 
 
 #include "guicast.h"
-#include "reader.inc"
 
-class ReaderTheme : public BC_Theme
+
+class Brush
 {
 public:
-    ReaderTheme();
-    void initialize();
-    void fill_box(VFrame *dst, uint32_t color);
-
-    int margin;
-// button graphics for each color
-    VFrame **top_colors[TOTAL_COLORS];
-    VFrame **bottom_colors[TOTAL_COLORS];
+    Brush();
+    ~Brush();
+    
+    int size;
+    VFrame *image;
 };
+
+extern ArrayList<Brush*> outline_brushes;
+extern ArrayList<Brush*> solid_brushes;
+
+void init_brushes();
+
 
 
 
 
 
 #endif
+
+
 

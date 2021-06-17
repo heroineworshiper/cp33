@@ -30,8 +30,10 @@ PNGS := \
 
 OBJS := \
 	reader.o \
+	readerbrushes.o \
     readermenu.o \
 	readertheme.o \
+	readerwindow.o
 	
 
 LIBS := \

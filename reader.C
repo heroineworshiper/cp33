@@ -41,10 +41,6 @@
 // make -f Makefile.reader
 // scp reader pi2:
 
-#include "clip.h"
-#include "guicast.h"
-#include "cursors.h"
-#include "keys.h"
 #include <stdlib.h>
 #include <string.h>
 #ifndef USE_WINDOW
@@ -65,8 +61,12 @@
 
 
 #include "reader.h"
+#include "readerbrushes.h"
 #include "readermenu.h"
 #include "readertheme.h"
+#include "readerwindow.h"
+
+
 typedef struct
 {
     int accum;
@@ -98,51 +98,26 @@ char *fbp = 0;
 
 
 
-MWindow* MWindow::mwindow = 0;
-const uint32_t MWindow::top_colors[TOTAL_COLORS] = 
-{
-    0x000000, // black
-    0x808080, // grey
-    0xff0000, // red
-    0xcc44cc, // purple
-    0x00ff00, // green
-    0x0000ff, // blue
-    0x664400, // brown
-};
 
-const uint32_t MWindow::bottom_colors[TOTAL_COLORS] = 
+Page::Page()
 {
-    0xeeee77, // yellow
-    0xbbbbbb, // light grey
-    0xff7777, // light red
-    0xaaffee, // cyan
-    0xaaff66, // light green
-    0x0088ff, // light blue
-    0xdd8855, // orange
-};
+    x1 = y1 = x2 = y2 = 0;
+    image = 0;
+    annotations = 0;
+}
 
-
-class Page
+Page::~Page()
 {
-public:
-    Page()
+    if(image)
     {
-        x1 = y1 = x2 = y2 = 0;
-        image = 0;
+        delete image;
     }
     
-    ~Page()
+    if(annotations)
     {
-        if(image)
-        {
-            delete image;
-        }
+        delete annotations;
     }
-    
-    int x1, y1, x2, y2;
-    string path;
-    VFrame *image;
-};
+}
 
 ArrayList<Page*> pages;
 
@@ -150,354 +125,46 @@ ArrayList<Page*> pages;
 
 
 
-MWindow::MWindow() : BC_Window()
-{
-    current_page = 0;
 
-//#ifndef USE_WINDOW
-//    set_border(0);
-//#endif
-};
-
-    
-void MWindow::create_objects()
-{
-	defaults = new BC_Hash("~/.readerrc");
-	defaults->load();
-    BC_WindowBase::load_defaults(defaults);
-    
-    is_top = defaults->get("IS_TOP", 0);
-    is_hollow = defaults->get("IS_HOLLOW", 0);
-    top_color = defaults->get("TOP_COLOR", 0);
-    bottom_color = defaults->get("BOTTOM_COLOR", 0);
-    brush_size = defaults->get("BRUSH_SIZE", 1);
-    CLAMP(top_color, 0, TOTAL_COLORS - 1);
-    CLAMP(bottom_color, 0, TOTAL_COLORS - 1);
-    CLAMP(brush_size, 1, MAX_BRUSH);
-
-    
-    if(get_resources()->filebox_w > ROOT_W)
-    {
-        get_resources()->filebox_w = ROOT_W;
-    }
-    if(get_resources()->filebox_h > ROOT_H)
-    {
-        get_resources()->filebox_h = ROOT_H;
-    }
-    sprintf(get_resources()->filebox_filter, "*.reader");
-
-    theme = new ReaderTheme;
-    theme->initialize();
-    get_resources()->bg_color = WHITE;
-
-    create_window("Reader", // title
-        0, // x
-        0, // y
-        ROOT_W, // w
-        ROOT_H, // h
-        -1, // min_w
-        -1, // min_h
-        0, // allow_resize
-        1, // private_color
-        1, // hide
-        WHITE, // bg_color
-        "", // display_name
-        0); // group_it
-    root_w = get_w();
-    root_h = get_h();
-    if(client_mode)
-    {
-
-        set_cursor(TRANSPARENT_CURSOR, 0, 0);
-    }
-// draw bitmaps to the foreground/win instead of the back buffer/pixmap
-#ifndef BG_PIXMAP
-
-    start_video();
-#endif
-
-
-
-    show_window(1);
-
-    menu = new MenuThread;
-    menu->create_objects();
-    menu->start();
-    
-    load = new LoadFileThread;
-//    printf("MWindow::create_objects %d color_model=%d\n", __LINE__, get_color_model());
-}
-
-void MWindow::save_defaults()
-{
-    BC_WindowBase::save_defaults(defaults);
-    defaults->update("IS_TOP", is_top);
-    defaults->update("IS_HOLLOW", is_hollow);
-    defaults->update("TOP_COLOR", (int32_t)top_color);
-    defaults->update("BOTTOM_COLOR", (int32_t)bottom_color);
-    defaults->update("BRUSH_SIZE", (int32_t)brush_size);
-    defaults->save();
-}
-
-void MWindow::show_error(char *text)
-{
-    lock_window();
-    clear_box(0, 0, root_w, root_h, 0);
-    set_color(BLACK);
-    draw_text(theme->margin, 
-        theme->margin + get_text_height(MEDIUMFONT), 
-        text);
-    flash();
-    unlock_window();
-}
-void MWindow::show_page(int number)
-{
-    if(number >= pages.size())
-    {
-        lock_window();
-        clear_box(0, 0, root_w, root_h, 0);
-        flash();
-        unlock_window();
-        return;
-    }
-
-
-    Page *page = pages.get(number);
-    lock_window();
-    BC_Bitmap *bitmap = get_temp_bitmap(root_w,
-        root_h,
-        get_color_model());
-//printf("MWindow::show_page %d color_model=%d\n", __LINE__, get_color_model());
-
-// convert to display color model
-    switch(get_color_model())
-    {
-        case BC_BGR8888:
-            for(int i = 0; i < root_h; i++)
-            {
-                uint8_t *src_row = page->image->get_rows()[i];
-                uint8_t *dst_row = bitmap->get_row_pointers()[i];
-                for(int j = 0; j < root_w; j++)
-                {
-                    uint8_t src_value = *src_row++;
-                    uint8_t r = 0;
-                    uint8_t g = 0;
-                    uint8_t b = 0;
-    // bit mask to RGB
-                    if((src_value & 0x1))
-                    {
-                        r = 0xff;
-                    }
-
-                    if((src_value & 0x2))
-                    {
-                        g = 0xff;
-                    }
-
-                    if((src_value & 0x4))
-                    {
-                        b = 0xff;
-                    }
-
-                    dst_row[0] = b;
-                    dst_row[1] = g;
-                    dst_row[2] = r;
-                    dst_row += 4;
-                }
-            }
-            break;
-
-        case BC_RGB565:
-        {
-            const uint16_t table[] =
-            {
-                0b0000000000000000,
-                0b1111100000000000,
-                0b0000011111100000,
-                0b1111111111100000,
-                0b0000000000011111,
-                0b1111100000011111,
-                0b0000011111111111,
-                0b1111111111111111
-            };
-            for(int i = 0; i < root_h; i++)
-            {
-                uint8_t *src_row = page->image->get_rows()[i];
-                uint16_t *dst_row = (uint16_t*)bitmap->get_row_pointers()[i];
-                for(int j = 0; j < root_w; j++)
-                {
-// bit mask to RGB
-                    *dst_row++ = table[*src_row++];
-                }
-            }
-            break;
-        }
-
-        case BC_RGB8:
-        {
-            const uint8_t table[] =
-            {
-                0b00000000,
-                0b11000000,
-                0b00111000,
-                0b11111000,
-                0b00000111,
-                0b11000111,
-                0b00111111,
-                0b11111111
-            };
-            for(int i = 0; i < root_h; i++)
-            {
-                uint8_t *src_row = page->image->get_rows()[i];
-                uint8_t *dst_row = bitmap->get_row_pointers()[i];
-                for(int j = 0; j < root_w; j++)
-                {
-// bit mask to RGB
-                    *dst_row++ = table[*src_row++];
-                }
-            }
-            break;
-        }
-
-        default:
-            if(get_color_model() != BC_BGR8888)
-            {
-                printf("MWindow::show_page %d unknown color model %d\n",
-                    __LINE__,
-                    get_color_model());
-            }
-            break;
-    }
-
-    draw_bitmap(bitmap, 0);
-#ifdef BG_PIXMAP
-    flash();
-#endif
-    unlock_window();
-}
-
-
-int MWindow::keypress_event()
-{
-    switch(get_keypress())
-    {
-        case LEFT:
-            prev_page();
-            break;
-
-        case RIGHT:
-            next_page();
-            break;
-
-        case ESC:
-            set_done(1);
-            break;
-    }
-
-    return 1;
-}
-
-int MWindow::button_release_event()
-{
-//    set_cursor(ARROW_CURSOR, 0, 1);
-    int x = get_abs_cursor_x(0);
-    int y = get_abs_cursor_y(0);
-    unlock_window();
-
-    MenuWindow::menu_window->lock_window();
-    if(x + MenuWindow::menu_window->get_w() > root_w)
-    {
-        x = root_w - MenuWindow::menu_window->get_w();
-    }
-    if(y + MenuWindow::menu_window->get_h() > root_h)
-    {
-        y = root_h - MenuWindow::menu_window->get_h();
-    }
-    if(x < 0)
-    {
-        x = 0;
-    }
-
-    if(y < 0)
-    {
-        y = 0;
-    }
-    MenuWindow::menu_window->unlock_window();
-
-
-    if(load->is_running())
-    {
-        load->lock_gui("MWindow::button_release_event");
-        load->gui->raise_window(1);
-        load->unlock_gui();
-    }
-    else
-    if(menu->gui->get_hidden())
-    {
-// show the menu
-//printf("MWindow::button_release_event %d %d %d\n", __LINE__, x, y);
-        
-        menu->gui->lock_window();
-        menu->gui->show_window();
-// have to rehide buttons after show_window
-        menu->gui->update_buttons();
-// have to reposition after showing
-        menu->gui->reposition_window(x, y);
-        menu->gui->raise_window(1);
-        menu->gui->unlock_window();
-    }
-    else
-    {
-//printf("MWindow::button_release_event %d\n", __LINE__);
-// close all the windows
-        MenuWindow::menu_window->lock_window();
-        MenuWindow::menu_window->hide_windows(0);
-//        MenuWindow::menu_window->reposition_window(x, y);
-//        MenuWindow::menu_window->raise_window(1);
-        MenuWindow::menu_window->unlock_window();
-
-    }
-
-    lock_window();
-    return 1;
-}
-
-
-void next_page()
+void next_page(int step, int lock_it)
 {
 //    printf("next_page %d\n", __LINE__);
 #ifdef TWO_PAGE
     if(MWindow::mwindow->current_page < pages.size() - 2)
     {
-        MWindow::mwindow->current_page += 2;
+        MWindow::mwindow->reset_undo();
+        MWindow::mwindow->current_page += step;
         int temp = MWindow::mwindow->current_page + 1;
         send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
-        MWindow::mwindow->show_page(MWindow::mwindow->current_page);
+        MWindow::mwindow->show_page(MWindow::mwindow->current_page, lock_it);
         wait_command();
     }
 #else
     if(MWindow::mwindow->current_page < pages.size() - 1)
     {
+        MWindow::mwindow->reset_undo();
         MWindow::mwindow->current_page++;
-        MWindow::mwindow->show_page(MWindow::mwindow->current_page);
+        MWindow::mwindow->show_page(MWindow::mwindow->current_page, lock_it);
     }
 #endif
 }
 
-void prev_page()
+void prev_page(int step, int lock_it)
 {
 //    printf("prev_page %d\n", __LINE__);
     if(MWindow::mwindow->current_page > 0)
     {
 #ifdef TWO_PAGE
-        MWindow::mwindow->current_page -= 2;
+        MWindow::mwindow->reset_undo();
+        MWindow::mwindow->current_page -= step;
         int temp = MWindow::mwindow->current_page + 1;
         send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
-        MWindow::mwindow->show_page(MWindow::mwindow->current_page);
+        MWindow::mwindow->show_page(MWindow::mwindow->current_page, lock_it);
         wait_command();
 #else
+        MWindow::mwindow->reset_undo();
         MWindow::mwindow->current_page--;
-        MWindow::mwindow->show_page(MWindow::mwindow->current_page);
+        MWindow::mwindow->show_page(MWindow::mwindow->current_page, lock_it);
 #endif
     }
 }
@@ -598,7 +265,7 @@ void* button_thread(void *ptr)
                 {
                     up_button.next_time = up_button.time + REPEAT2;
                 }
-                next_page();
+                next_page(2);
             }
         }
         else
@@ -610,7 +277,7 @@ void* button_thread(void *ptr)
                 {
                     down_button.next_time = down_button.time + REPEAT2;
                 }
-                prev_page();
+                prev_page(2);
             }
         }
         
@@ -703,7 +370,7 @@ void* client_thread(void *ptr)
                     (((uint32_t)packet[2]) << 8) |
                     (((uint32_t)packet[3]) << 16) |
                     (((uint32_t)packet[4]) << 24);
-                MWindow::mwindow->show_page(MWindow::mwindow->current_page);
+                MWindow::mwindow->show_page(MWindow::mwindow->current_page, 1);
                 result = 0;
                 break;
         }
@@ -861,6 +528,7 @@ int load_file(char *path)
     else
     {
         MWindow::mwindow->current_page = 0;
+        MWindow::mwindow->reset_undo();
     }
 
     FILE *src_fd = fopen(path, "r");
@@ -900,24 +568,18 @@ int load_file(char *path)
     {
         Page *page = new Page;
         pages.append(page);
-        page->image = new VFrame;
-        page->image->set_use_shm(0);
-        page->image->reallocate(
-		    0,   // Data if shared
-		    -1,             // shmid if IPC  -1 if not
-		    0,         // plane offsets if shared YUV
-		    0,
-		    0,
-		    src_w, 
+        page->image = new VFrame(src_w, 
 		    src_h, 
-		    BC_A8, 
-		    -1);   // -1 if unused
+		    BC_A8);
+        page->annotations = new VFrame(src_w, 
+		    src_h, 
+		    BC_A8);
         int _ = fread(page->image->get_data(), 1, src_w * src_h, src_fd);
     }
     fclose(src_fd);
 
 // show page 1
-    MWindow::mwindow->show_page(MWindow::mwindow->current_page);
+    MWindow::mwindow->show_page(MWindow::mwindow->current_page, 1);
     return 0;
 }
 
@@ -963,6 +625,8 @@ int main(int argc, char *argv[])
 //    init_fb();
     BC_Resources::dpi = BASE_DPI;
     BC_Resources::override_dpi = 1;
+    init_brushes();
+    MWindow::init_colors();
     MWindow::mwindow = new MWindow;
     MWindow::mwindow->create_objects();
 

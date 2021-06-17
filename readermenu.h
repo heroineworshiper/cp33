@@ -1,3 +1,26 @@
+/*
+ * MUSIC READER
+ * Copyright (C) 2021 Adam Williams <broadcast at earthling dot net>
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ */
+
+#ifndef READERMENU_H
+#define READERMENU_H
+
 #include "guicast.h"
 #include "reader.inc"
 
@@ -168,10 +191,18 @@ public:
 };
 
 
-class BrushSize : public BC_TumbleTextBox
+class DrawSize : public BC_TumbleTextBox
 {
 public:
-    BrushSize(int x, int y, int w);
+    DrawSize(int x, int y, int w);
+    int handle_event();
+};
+
+
+class EraseSize : public BC_TumbleTextBox
+{
+public:
+    EraseSize(int x, int y, int w);
     int handle_event();
 };
 
@@ -198,7 +229,8 @@ public:
     Filled *filled;
     Top *top;
     Bottom *bottom;
-    BrushSize *size;
+    DrawSize *draw_size;
+    EraseSize *erase_size;
     TopColor *top_color;
     BottomColor *bottom_color;
 // background for palette
@@ -220,3 +252,4 @@ public:
 
 
 
+#endif

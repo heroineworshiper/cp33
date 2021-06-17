@@ -1,3 +1,24 @@
+/*
+ * MUSIC READER
+ * Copyright (C) 2021 Adam Williams <broadcast at earthling dot net>
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ */
+
+
 #ifndef READER_H
 #define READER_H
 
@@ -15,6 +36,8 @@
 #define ROOT_W 768
 #define ROOT_H 1366
 
+// undo levels for annotations
+#define UNDO_LEVELS 10
 
 // use double buffering
 #define BG_PIXMAP
@@ -41,50 +64,34 @@
 #define REPEAT2 (1)
 
 
+// operations
+#define IDLE 0
+#define DRAWING 1
+#define ERASING 2
+
+extern int client_mode;
 
 int load_file(char *path);
 void load_file_entry(char *path);
 int send_command(int id, uint8_t *value, int value_size);
 int wait_command();
-void prev_page();
-void next_page();
+void prev_page(int step, int lock_it);
+void next_page(int step, int lock_it);
 
-class MWindow : public BC_Window
+
+class Page
 {
 public:
-    MWindow();
+    Page();
+    ~Page();
     
-    void create_objects();
-    void show_page(int number);
-    int keypress_event();
-    int button_release_event();
-    void save_defaults();
-    void show_error(char *text);
-
-    int root_w;
-    int root_h;
-    int current_page;
-// the current layer
-    int is_top;
-// index of color in table
-    uint32_t top_color;
-    uint32_t bottom_color;
-    int brush_size;
-    int is_hollow;
-    
-    
-    MenuThread *menu;
-    LoadFileThread *load;
-    ReaderTheme *theme;
-    BC_Hash *defaults;
-    static MWindow *mwindow;
-    
-    static const uint32_t top_colors[TOTAL_COLORS];
-    static const uint32_t bottom_colors[TOTAL_COLORS];
+    int x1, y1, x2, y2;
+    string path;
+    VFrame *image;
+    VFrame *annotations;
 };
 
-
-
+extern ArrayList<Page*> pages;
 
 #endif
 

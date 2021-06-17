@@ -22,6 +22,7 @@
 #include "reader.h"
 #include "readermenu.h"
 #include "readertheme.h"
+#include "readerwindow.h"
 
 MenuWindow* MenuWindow::menu_window = 0;
 PaletteWindow* PaletteWindow::palette_window = 0;
@@ -255,6 +256,7 @@ LoadFile::LoadFile(int x, int y)
 int LoadFile::handle_event()
 {
     unlock_window();
+    MWindow::mwindow->exit_drawing();
     MenuWindow::menu_window->hide_windows(1);
     MWindow::mwindow->load->start();
     
@@ -286,6 +288,11 @@ Undo::Undo(int x, int y)
 
 int Undo::handle_event()
 {
+    unlock_window();
+    MWindow::mwindow->lock_window();
+    MWindow::mwindow->pop_undo();
+    MWindow::mwindow->unlock_window();
+    lock_window();
     return 1;
 }
 
@@ -297,6 +304,11 @@ Redo::Redo(int x, int y)
 
 int Redo::handle_event()
 {
+    unlock_window();
+    MWindow::mwindow->lock_window();
+    MWindow::mwindow->pop_redo();
+    MWindow::mwindow->unlock_window();
+    lock_window();
     return 1;
 }
 
@@ -312,6 +324,9 @@ PrevPage::PrevPage(int x, int y)
 
 int PrevPage::handle_event()
 {
+    unlock_window();
+    prev_page(1, 1);
+    lock_window();
     return 1;
 }
 
@@ -323,6 +338,9 @@ NextPage::NextPage(int x, int y)
 
 int NextPage::handle_event()
 {
+    unlock_window();
+    next_page(1, 1);
+    lock_window();
     return 1;
 }
 
@@ -331,7 +349,10 @@ int NextPage::handle_event()
 
 
 Draw::Draw(int x, int y)
- : BC_Toggle(x, y, MWindow::mwindow->theme->get_image_set("draw"), 0)
+ : BC_Toggle(x, 
+    y, 
+    MWindow::mwindow->theme->get_image_set("draw"), 
+    MWindow::mwindow->current_operation == DRAWING)
 {
     set_tooltip("Draw");
 }
@@ -339,6 +360,15 @@ Draw::Draw(int x, int y)
 int Draw::handle_event()
 {
     MenuWindow::menu_window->erase->set_value(0);
+    if(get_value())
+    {
+        MWindow::mwindow->enter_drawing(DRAWING);
+    }
+    else
+    {
+        MWindow::mwindow->exit_drawing();
+    }
+    
     return 1;
 }
 
@@ -346,7 +376,10 @@ int Draw::handle_event()
 
 
 Erase::Erase(int x, int y)
- : BC_Toggle(x, y, MWindow::mwindow->theme->get_image_set("erase"), 0)
+ : BC_Toggle(x, 
+    y, 
+    MWindow::mwindow->theme->get_image_set("erase"), 
+    MWindow::mwindow->current_operation == ERASING)
 {
     set_tooltip("Erase");
 }
@@ -354,6 +387,14 @@ Erase::Erase(int x, int y)
 int Erase::handle_event()
 {
     MenuWindow::menu_window->draw->set_value(0);
+    if(get_value())
+    {
+        MWindow::mwindow->enter_drawing(ERASING);
+    }
+    else
+    {
+        MWindow::mwindow->exit_drawing();
+    }
     return 1;
 }
 
@@ -454,21 +495,41 @@ int BottomColor::handle_event()
 
 
 
-BrushSize::BrushSize(int x, int y, int w)
+DrawSize::DrawSize(int x, int y, int w)
  : BC_TumbleTextBox(MenuWindow::menu_window, 
-	MWindow::mwindow->brush_size,
+	MWindow::mwindow->draw_size,
 	1,
 	MAX_BRUSH,
 	x, 
 	y, 
 	w)
 {
-    set_tooltip("Brush size");
+    set_tooltip("Draw size");
 }
 
-int BrushSize::handle_event()
+int DrawSize::handle_event()
 {
-    MWindow::mwindow->brush_size = atoi(get_text());
+    MWindow::mwindow->draw_size = atoi(get_text());
+    return 1;
+}
+
+
+
+EraseSize::EraseSize(int x, int y, int w)
+ : BC_TumbleTextBox(MenuWindow::menu_window, 
+	MWindow::mwindow->erase_size,
+	1,
+	MAX_BRUSH,
+	x, 
+	y, 
+	w)
+{
+    set_tooltip("Erase size");
+}
+
+int EraseSize::handle_event()
+{
+    MWindow::mwindow->erase_size = atoi(get_text());
     return 1;
 }
 
@@ -483,7 +544,7 @@ MenuWindow::MenuWindow()
     0,
 	MWindow::mwindow->theme->get_image_set("load")[0]->get_w() * 4 + 
         MWindow::mwindow->theme->margin * 2, 
-	MWindow::mwindow->theme->get_image_set("load")[0]->get_h() * 4 + 
+	MWindow::mwindow->theme->get_image_set("load")[0]->get_h() * 5 + 
         MWindow::mwindow->theme->margin * 2,
     -1,
     -1,
@@ -521,20 +582,28 @@ void MenuWindow::create_objects()
     x += window->get_w();
     add_tool(window = new NextPage(x, y));
     x += window->get_w();
-    add_tool(draw = new Draw(x, y));
-    x += draw->get_w();
-    add_tool(erase = new Erase(x, y));
+    add_tool(hollow = new Hollow(x, y));
+    add_tool(filled = new Filled(x, y));
+
+
 
     y += window->get_h();
     x = x1;
-    add_tool(hollow = new Hollow(x, y));
-    add_tool(filled = new Filled(x, y));
-    
-    x += hollow->get_w() + margin;
-    size = new BrushSize(x, 
+    add_tool(draw = new Draw(x, y));
+    x += draw->get_w();
+    draw_size = new DrawSize(x, 
         y, 
         get_w() - x - margin - BC_Tumbler::calculate_w());
-    size->create_objects();
+    draw_size->create_objects();
+
+    y += window->get_h();
+    x = x1;
+    add_tool(erase = new Erase(x, y));
+    x += erase->get_w();
+    erase_size = new EraseSize(x, 
+        y, 
+        get_w() - x - margin - BC_Tumbler::calculate_w());
+    erase_size->create_objects();
 
     y += window->get_h();
     x = x1;
@@ -550,6 +619,7 @@ void MenuWindow::create_objects()
 
 int MenuWindow::close_event()
 {
+    MWindow::mwindow->exit_drawing();
     hide_windows(0);
 
 #ifndef BG_PIXMAP
@@ -561,6 +631,9 @@ int MenuWindow::close_event()
 
 void MenuWindow::update_buttons()
 {
+    draw->set_value(MWindow::mwindow->current_operation == DRAWING);
+    erase->set_value(MWindow::mwindow->current_operation == ERASING);
+
     if(MWindow::mwindow->is_hollow)
     {
         filled->hide_window();
