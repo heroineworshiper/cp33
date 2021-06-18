@@ -36,6 +36,11 @@
 #define ROOT_W 768
 #define ROOT_H 1366
 
+// where files are stored
+#define READER_PATH "/reader/"
+#define READER_SUFFIX ".reader.gz"
+#define ANNOTATION_SUFFIX ".annotate.gz"
+
 // undo levels for annotations
 #define UNDO_LEVELS 10
 
@@ -53,6 +58,7 @@
 // command IDs
 #define LOAD_FILE 0
 #define SHOW_PAGE 1
+#define LOAD_ANNOTATIONS 2
 
 // button GPIOs
 #define UP_GPIO 14
@@ -70,7 +76,12 @@
 #define ERASING 2
 
 extern int client_mode;
+extern char reader_path[BCTEXTLEN];
+extern int file_changed;
+extern int current_page;
 
+int save_annotations();
+int load_annotations();
 int load_file(char *path);
 void load_file_entry(char *path);
 int send_command(int id, uint8_t *value, int value_size);

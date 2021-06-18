@@ -71,10 +71,10 @@ public:
     void push_undo_after();
     void pop_undo();
     void pop_redo();
+    void update_save();
 
     int root_w;
     int root_h;
-    int current_page;
 // the current layer
     int is_top;
 // index of color in table

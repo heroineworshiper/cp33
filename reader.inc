@@ -7,6 +7,6 @@ class MenuThread;
 class ReaderTheme;
 
 #define TOTAL_COLORS 7
-#define MAX_BRUSH 32
+#define MAX_BRUSH 64
 
 #endif

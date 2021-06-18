@@ -223,6 +223,7 @@ public:
     void update_colors();
     void update_buttons();
 
+    Save *save;
     Draw *draw;
     Erase *erase;
     Hollow *hollow;

@@ -23,6 +23,7 @@
 #include "readermenu.h"
 #include "readertheme.h"
 #include "readerwindow.h"
+#include "clip.h"
 
 MenuWindow* MenuWindow::menu_window = 0;
 PaletteWindow* PaletteWindow::palette_window = 0;
@@ -50,7 +51,7 @@ BC_Window* LoadFileThread::new_gui()
 {
 	char default_path[BCTEXTLEN];
 
-	sprintf(default_path, "~");
+	sprintf(default_path, READER_PATH);
 	MWindow::mwindow->defaults->get("DEFAULT_LOADPATH", default_path);
 
 //     int x = MWindow::mwindow->get_abs_cursor_x(1);
@@ -84,7 +85,9 @@ BC_Window* LoadFileThread::new_gui()
 
 	gui = new LoadFileWindow(/* x, y,*/ 0, 0, default_path);
     gui->get_filters()->remove_all_objects();
-    gui->get_filters()->append(new BC_ListBoxItem("*.reader"));
+    char string[BCTEXTLEN];
+    sprintf(string, "*%s", READER_SUFFIX);
+    gui->get_filters()->append(new BC_ListBoxItem(string));
 
 	gui->create_objects();
 	return gui;
@@ -275,6 +278,12 @@ Save::Save(int x, int y)
 
 int Save::handle_event()
 {
+    if(!save_annotations())
+    {
+        set_images(MWindow::mwindow->theme->get_image_set("save"));
+        draw_face(1);
+        file_changed = 0;
+    }
     return 1;
 }
 
@@ -509,7 +518,17 @@ DrawSize::DrawSize(int x, int y, int w)
 
 int DrawSize::handle_event()
 {
-    MWindow::mwindow->draw_size = atoi(get_text());
+    MenuWindow::menu_window->unlock_window();
+    MWindow::mwindow->lock_window();
+    int cursor_x = MWindow::mwindow->cursor_x;
+    int cursor_y = MWindow::mwindow->cursor_y;
+    MWindow::mwindow->hide_cursor();
+    int value = atoi(get_text());
+    CLAMP(value, 1, MAX_BRUSH);
+    MWindow::mwindow->draw_size = value;
+    MWindow::mwindow->update_cursor(cursor_x, cursor_y);
+    MWindow::mwindow->unlock_window();
+    MenuWindow::menu_window->lock_window();
     return 1;
 }
 
@@ -529,7 +548,17 @@ EraseSize::EraseSize(int x, int y, int w)
 
 int EraseSize::handle_event()
 {
-    MWindow::mwindow->erase_size = atoi(get_text());
+    MenuWindow::menu_window->unlock_window();
+    MWindow::mwindow->lock_window();
+    int cursor_x = MWindow::mwindow->cursor_x;
+    int cursor_y = MWindow::mwindow->cursor_y;
+    MWindow::mwindow->hide_cursor();
+    int value = atoi(get_text());
+    CLAMP(value, 1, MAX_BRUSH);
+    MWindow::mwindow->erase_size = value;
+    MWindow::mwindow->update_cursor(cursor_x, cursor_y);
+    MWindow::mwindow->unlock_window();
+    MenuWindow::menu_window->lock_window();
     return 1;
 }
 
@@ -570,8 +599,8 @@ void MenuWindow::create_objects()
     BC_SubWindow *window;
     add_tool(window = new LoadFile(x, y));
     x += window->get_w();
-    add_tool(window = new Save(x, y));
-    x += window->get_w();
+    add_tool(save = new Save(x, y));
+    x += save->get_w();
     add_tool(window = new Undo(x, y));
     x += window->get_w();
     add_tool(window = new Redo(x, y));

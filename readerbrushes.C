@@ -26,7 +26,7 @@
 
 // the X11 & gimp circle drawing routines suck
 
-
+#include "reader.inc"
 #include "readerbrushes.h"
 
 ArrayList<Brush*> outline_brushes;
@@ -34,7 +34,7 @@ ArrayList<Brush*> solid_brushes;
 
 
 
-#define BASE 32
+#define BASE MAX_BRUSH
 uint8_t base_bitmap[BASE * BASE];
 
 Brush::Brush()
@@ -118,7 +118,7 @@ void init_brushes()
 
     int quad_size;
     int brush_size = 1;
-    for(quad_size = 1; quad_size < 17; quad_size++)
+    for(quad_size = 1; quad_size < MAX_BRUSH / 2 + 1; quad_size++)
     {
         uint8_t *quad = make_quad(quad_size);
 

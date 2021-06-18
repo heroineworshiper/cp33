@@ -58,6 +58,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 
 
 #include "reader.h"
@@ -95,8 +96,10 @@ struct fb_fix_screeninfo finfo;
 int screensize = 0;
 char *fbp = 0;
 
-
-
+// the current file
+char reader_path[BCTEXTLEN];
+int file_changed = 0;
+int current_page = 0;
 
 
 Page::Page()
@@ -130,21 +133,21 @@ void next_page(int step, int lock_it)
 {
 //    printf("next_page %d\n", __LINE__);
 #ifdef TWO_PAGE
-    if(MWindow::mwindow->current_page < pages.size() - 2)
+    if(current_page < pages.size() - 2)
     {
         MWindow::mwindow->reset_undo();
-        MWindow::mwindow->current_page += step;
-        int temp = MWindow::mwindow->current_page + 1;
+        current_page += step;
+        int temp = current_page + 1;
         send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
-        MWindow::mwindow->show_page(MWindow::mwindow->current_page, lock_it);
+        MWindow::mwindow->show_page(current_page, lock_it);
         wait_command();
     }
 #else
-    if(MWindow::mwindow->current_page < pages.size() - 1)
+    if(current_page < pages.size() - 1)
     {
         MWindow::mwindow->reset_undo();
-        MWindow::mwindow->current_page++;
-        MWindow::mwindow->show_page(MWindow::mwindow->current_page, lock_it);
+        current_page++;
+        MWindow::mwindow->show_page(current_page, lock_it);
     }
 #endif
 }
@@ -152,19 +155,19 @@ void next_page(int step, int lock_it)
 void prev_page(int step, int lock_it)
 {
 //    printf("prev_page %d\n", __LINE__);
-    if(MWindow::mwindow->current_page > 0)
+    if(current_page > 0)
     {
 #ifdef TWO_PAGE
         MWindow::mwindow->reset_undo();
-        MWindow::mwindow->current_page -= step;
-        int temp = MWindow::mwindow->current_page + 1;
+        current_page -= step;
+        int temp = current_page + 1;
         send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
-        MWindow::mwindow->show_page(MWindow::mwindow->current_page, lock_it);
+        MWindow::mwindow->show_page(current_page, lock_it);
         wait_command();
 #else
         MWindow::mwindow->reset_undo();
-        MWindow::mwindow->current_page--;
-        MWindow::mwindow->show_page(MWindow::mwindow->current_page, lock_it);
+        current_page--;
+        MWindow::mwindow->show_page(current_page, lock_it);
 #endif
     }
 }
@@ -365,12 +368,19 @@ void* client_thread(void *ptr)
             case LOAD_FILE:
                 result = load_file((char*)(packet + 1));
                 break;
+            case LOAD_ANNOTATIONS:
+                result = load_annotations();
+                if(!result)
+                {
+                    MWindow::mwindow->show_page(current_page, 1);
+                }
+                break;
             case SHOW_PAGE:
-                MWindow::mwindow->current_page = (uint32_t)packet[1] |
+                current_page = (uint32_t)packet[1] |
                     (((uint32_t)packet[2]) << 8) |
                     (((uint32_t)packet[3]) << 16) |
                     (((uint32_t)packet[4]) << 24);
-                MWindow::mwindow->show_page(MWindow::mwindow->current_page, 1);
+                MWindow::mwindow->show_page(current_page, 1);
                 result = 0;
                 break;
         }
@@ -516,6 +526,108 @@ void init_fb()
         0);
 }
 
+// convert the path to an annotation path
+void get_annotation_path(char *dst, char *src)
+{
+    strcpy(dst, src);
+    char *ptr = strstr(dst, READER_SUFFIX);
+    if(ptr)
+    {
+        sprintf(ptr, ANNOTATION_SUFFIX);
+    }
+    else
+    {
+// don't overwrite the src if failure
+        dst[0] = 0;
+    }
+}
+
+int save_annotations()
+{
+    char path[BCTEXTLEN];
+    if(reader_path[0] && pages.size() > 0)
+    {
+        get_annotation_path(path, reader_path);
+        
+        char command[BCTEXTLEN];
+        sprintf(command, "gzip -1 > %s", path);
+        FILE *fd = popen(command, "w");
+        if(!fd)
+        {
+            printf("save_annotations %d: error writing to %s\n",
+                __LINE__,
+                path);
+            return 1;
+        }
+        
+        
+        for(int i = 0; i < pages.size(); i++)
+        {
+            VFrame *frame = pages.get(i)->annotations;
+            fwrite(frame->get_rows()[0],
+                1,
+                frame->get_w() * frame->get_h(),
+                fd);
+        }
+        
+        fclose(fd);
+        file_changed = 0;
+        return 0;
+    }
+    return 1;
+}
+
+int load_annotations()
+{
+    char path[BCTEXTLEN];
+    if(reader_path[0] && pages.size() > 0)
+    {
+        get_annotation_path(path, reader_path);
+        
+// test file's existence
+        struct stat statbuf;
+        if(stat(path, &statbuf))
+        {
+// doesn't exist
+            printf("load_annotations %d: no annotation file %s\n",
+                __LINE__,
+                path);
+            return 1;
+        }
+        
+        char command[BCTEXTLEN];
+        sprintf(command, "gunzip -c %s", path);
+        FILE *fd = popen(command, "r");
+        if(!fd)
+        {
+            printf("load_annotations %d: error reading %s\n",
+                __LINE__,
+                path);
+            return 1;
+        }
+        
+        
+        for(int i = 0; i < pages.size(); i++)
+        {
+            VFrame *frame = pages.get(i)->annotations;
+            int bytes_read = fread(frame->get_rows()[0],
+                1,
+                frame->get_w() * frame->get_h(),
+                fd);
+            if(bytes_read < frame->get_w() * frame->get_h())
+            {
+                printf("load_annotations %d: error reading %s page %d\n",
+                    __LINE__,
+                    path,
+                    i);
+            }
+        }
+        
+        fclose(fd);
+        return 0;
+    }
+}
+
 int load_file(char *path)
 {
     int i;
@@ -523,15 +635,20 @@ int load_file(char *path)
     pages.remove_all_objects();
     if(client_mode)
     {
-        MWindow::mwindow->current_page = 1;
+        current_page = 1;
     }
     else
     {
-        MWindow::mwindow->current_page = 0;
+        current_page = 0;
         MWindow::mwindow->reset_undo();
     }
 
-    FILE *src_fd = fopen(path, "r");
+    strcpy(reader_path, path);
+    file_changed = 0;
+
+    char command[BCTEXTLEN];
+    sprintf(command, "gunzip -c %s", path);
+    FILE *src_fd = popen(command, "r");
     if(!src_fd)
     {
         char string[BCTEXTLEN];
@@ -578,13 +695,21 @@ int load_file(char *path)
     }
     fclose(src_fd);
 
+
+    load_annotations();
+
 // show page 1
-    MWindow::mwindow->show_page(MWindow::mwindow->current_page, 1);
+    MWindow::mwindow->show_page(current_page, 1);
     return 0;
 }
 
 void load_file_entry(char *path)
 {
+    if(file_changed)
+    {
+        save_annotations();
+    }
+
 #ifdef TWO_PAGE
     send_command(LOAD_FILE, 
         (uint8_t*)path, 
@@ -594,6 +719,10 @@ void load_file_entry(char *path)
 #else
     ::load_file(path);
 #endif
+
+    MenuWindow::menu_window->save->set_images(MWindow::mwindow->theme->get_image_set("save"));
+    MenuWindow::menu_window->save->draw_face(1);
+
 }
 
 
@@ -693,6 +822,10 @@ int main(int argc, char *argv[])
 //     }
 
     MWindow::mwindow->run_window();
+    if(file_changed)
+    {
+        save_annotations();
+    }
     MWindow::mwindow->save_defaults();
     return 0;
 }

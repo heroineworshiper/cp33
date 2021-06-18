@@ -20,6 +20,7 @@ PNGS := \
     images/check.png \
     images/check_hi.png \
     images/save.png \
+    images/save2.png \
     images/erase.png \
     images/bottom_layer.png \
     images/top_layer.png \

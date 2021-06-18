@@ -26,6 +26,7 @@
 #include "readermenu.h"
 #include "readertheme.h"
 #include "readerwindow.h"
+#include <string.h>
 
 
 MWindow* MWindow::mwindow = 0;
@@ -58,7 +59,6 @@ uint16_t MWindow::bottom_rgb565[TOTAL_COLORS + 1];
 
 MWindow::MWindow() : BC_Window()
 {
-    current_page = 0;
     current_operation = IDLE;
     cursor_visible = 0;
     current_undo = 0;
@@ -183,10 +183,14 @@ void MWindow::load_defaults()
     {
         get_resources()->filebox_h = ROOT_H;
     }
-    sprintf(get_resources()->filebox_filter, "*.reader");
+
 
     BC_WindowBase::load_defaults(defaults);
-    }
+
+    char string[BCTEXTLEN];
+    sprintf(string, "*%s", READER_SUFFIX);
+    strcpy(get_resources()->filebox_filter, string);
+}
 
 
 void MWindow::save_defaults()
@@ -212,6 +216,22 @@ void MWindow::show_error(char *text)
     flash();
     unlock_window();
 }
+
+void MWindow::update_save()
+{
+    if(pages.size())
+    {
+        file_changed = 1;
+        unlock_window();
+        MenuWindow::menu_window->lock_window();
+        MenuWindow::menu_window->save->set_images(
+            MWindow::mwindow->theme->get_image_set("save2"));
+        MenuWindow::menu_window->save->draw_face(1);
+        MenuWindow::menu_window->unlock_window();
+        lock_window();
+    }
+}
+
 
 void MWindow::reset_undo()
 {
@@ -621,18 +641,19 @@ int MWindow::keypress_event()
 int MWindow::button_press_event()
 {
 // raise the menu
-    if(!menu->gui->get_hidden() &&
+    if(!MenuWindow::menu_window->get_hidden() &&
         current_operation != IDLE)
     {
-        menu->gui->lock_window();
-        menu->gui->raise_window(1);
-        menu->gui->unlock_window();
+        MenuWindow::menu_window->lock_window();
+        MenuWindow::menu_window->raise_window(1);
+        MenuWindow::menu_window->unlock_window();
     }
 
 // start a line segment
     switch(current_operation)
     {
         case DRAWING:
+            update_save();
             push_undo_before();
             segment_x = get_cursor_x();
             segment_y = get_cursor_y();
@@ -641,6 +662,7 @@ int MWindow::button_press_event()
             break;
         
         case ERASING:
+            update_save();
             push_undo_before();
             segment_x = get_cursor_x();
             segment_y = get_cursor_y();
@@ -704,19 +726,19 @@ int MWindow::button_release_event()
         load->unlock_gui();
     }
     else
-    if(menu->gui->get_hidden())
+    if(MenuWindow::menu_window->get_hidden())
     {
 // show the menu
 //printf("MWindow::button_release_event %d %d %d\n", __LINE__, x, y);
         
-        menu->gui->lock_window();
-        menu->gui->show_window();
+        MenuWindow::menu_window->lock_window();
+        MenuWindow::menu_window->show_window();
 // have to rehide buttons after show_window
-        menu->gui->update_buttons();
+        MenuWindow::menu_window->update_buttons();
 // have to reposition after showing
-        menu->gui->reposition_window(x, y);
-        menu->gui->raise_window(1);
-        menu->gui->unlock_window();
+        MenuWindow::menu_window->reposition_window(x, y);
+        MenuWindow::menu_window->raise_window(1);
+        MenuWindow::menu_window->unlock_window();
     }
     else
     {
@@ -1057,17 +1079,21 @@ void MWindow::update_cursor(int x, int y)
 {
     hide_cursor();
 
-// show new cursor position
-    cursor_x = x;
-    cursor_y = y;
-    if((current_operation == ERASING ||
-        current_operation == DRAWING) &&
-        x >= 0 && 
-        y >= 0)
+    if(current_operation == DRAWING ||
+        current_operation == ERASING)
     {
+// show new cursor position
+        cursor_x = x;
+        cursor_y = y;
+        if((current_operation == ERASING ||
+            current_operation == DRAWING) &&
+            x >= 0 && 
+            y >= 0)
+        {
 //printf("MWindow::update_cursor %d\n", __LINE__);
-        draw_cursor();
-        cursor_visible = 1;
+            draw_cursor();
+            cursor_visible = 1;
+        }
     }
 }
 

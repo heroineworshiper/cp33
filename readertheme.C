@@ -48,6 +48,11 @@ void ReaderTheme::initialize()
 		"button_hi.png",
 		"button_dn.png",
         "save");
+    new_button("save2.png",
+		"button_up.png",
+		"button_hi.png",
+		"button_dn.png",
+        "save2");
     new_button("undo.png",
 		"button_up.png",
 		"button_hi.png",
