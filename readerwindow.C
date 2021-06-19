@@ -482,6 +482,11 @@ void MWindow::show_page_fragment(int number,
         return;
     }
 
+    CLAMP(x1, 0, root_w);
+    CLAMP(x2, 0, root_w);
+    CLAMP(y1, 0, root_h);
+    CLAMP(y2, 0, root_h);
+
     Page *page = pages.get(number);
     if(lock_it)
     {
@@ -620,6 +625,8 @@ void MWindow::show_page_fragment(int number,
         x2 - y1,
         y2 - y1,
         0);
+
+//printf("MWindow::show_page_fragment %d %d %d %d %d\n", __LINE__, x1, y1, x2, y2);
     flash(x1, y1, x2 - x1, y2 - y1, 0);
     update_cursor(cursor_x2, cursor_y2);
     flush();
