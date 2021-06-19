@@ -91,16 +91,34 @@ void ReaderTheme::initialize()
 		"check_hi.png",
 		"draw");
 
-    new_button("hollow_brush.png",
+    new_toggle("line.png",
 		"button_up.png",
 		"button_hi.png",
+		"check.png",
 		"button_dn.png",
-		"hollow_brush");
-    new_button("filled_brush.png",
+		"check_hi.png",
+		"line");
+    new_toggle("box.png",
 		"button_up.png",
 		"button_hi.png",
+		"check.png",
 		"button_dn.png",
-		"filled_brush");
+		"check_hi.png",
+		"box");
+    new_toggle("disc.png",
+		"button_up.png",
+		"button_hi.png",
+		"check.png",
+		"button_dn.png",
+		"check_hi.png",
+		"disc");
+    new_toggle("circle.png",
+		"button_up.png",
+		"button_hi.png",
+		"check.png",
+		"button_dn.png",
+		"check_hi.png",
+		"circle");
     new_button("top_layer.png",
 		"button_up.png",
 		"button_hi.png",
@@ -159,11 +177,11 @@ void ReaderTheme::fill_box(VFrame *dst, uint32_t color)
     uint8_t **rows = dst->get_rows();
     uint8_t r = (color & 0xff0000) >> 16;
     uint8_t g = (color & 0xff00) >> 8;
-    uint8_t b = color & 0xff0;
-    for(int i = 5; i < 29; i++)
+    uint8_t b = color & 0xff;
+    for(int i = 5; i < 28; i++)
     {
         uint8_t *row = rows[i];
-        for(int j = 5; j < 30; j++)
+        for(int j = 5; j < 29; j++)
         {
             row[j * 4 + 0] = r;
             row[j * 4 + 1] = g;

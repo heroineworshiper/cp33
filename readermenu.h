@@ -148,17 +148,31 @@ public:
     int handle_event();
 };
 
-class Hollow : public BC_Button
+class Line : public BC_Toggle
 {
 public:
-    Hollow(int x, int y);
+    Line(int x, int y);
     int handle_event();
 };
 
-class Filled : public BC_Button
+class Circle : public BC_Toggle
 {
 public:
-    Filled(int x, int y);
+    Circle(int x, int y);
+    int handle_event();
+};
+
+class Disc : public BC_Toggle
+{
+public:
+    Disc(int x, int y);
+    int handle_event();
+};
+
+class Box : public BC_Toggle
+{
+public:
+    Box(int x, int y);
     int handle_event();
 };
 
@@ -226,8 +240,10 @@ public:
     Save *save;
     Draw *draw;
     Erase *erase;
-    Hollow *hollow;
-    Filled *filled;
+    Line *line;
+    Circle *circle;
+    Disc *disc;
+    Box *box;
     Top *top;
     Bottom *bottom;
     DrawSize *draw_size;

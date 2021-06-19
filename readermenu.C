@@ -204,14 +204,11 @@ void PaletteWindow::create_objects(int is_top)
             is_top, 
             i, 
             graphics[i]));
-        if(i < 3)
-        {
-            add_subwindow(new PaletteButton(x, 
-                y + graphics[0][0]->get_h(), 
-                is_top, 
-                i + 4, 
-                graphics[i + 4]));
-        }
+        add_subwindow(new PaletteButton(x, 
+            y + graphics[0][0]->get_h(), 
+            is_top, 
+            i + 4, 
+            graphics[i + 4]));
         x += graphics[0][0]->get_w();
     }
     
@@ -278,7 +275,7 @@ Save::Save(int x, int y)
 
 int Save::handle_event()
 {
-    if(!save_annotations())
+    if(!save_annotations_entry())
     {
         set_images(MWindow::mwindow->theme->get_image_set("save"));
         draw_face(1);
@@ -368,7 +365,6 @@ Draw::Draw(int x, int y)
 
 int Draw::handle_event()
 {
-    MenuWindow::menu_window->erase->set_value(0);
     if(get_value())
     {
         MWindow::mwindow->enter_drawing(DRAWING);
@@ -377,7 +373,7 @@ int Draw::handle_event()
     {
         MWindow::mwindow->exit_drawing();
     }
-    
+    MenuWindow::menu_window->update_buttons();
     return 1;
 }
 
@@ -395,7 +391,6 @@ Erase::Erase(int x, int y)
 
 int Erase::handle_event()
 {
-    MenuWindow::menu_window->draw->set_value(0);
     if(get_value())
     {
         MWindow::mwindow->enter_drawing(ERASING);
@@ -404,39 +399,112 @@ int Erase::handle_event()
     {
         MWindow::mwindow->exit_drawing();
     }
+    MenuWindow::menu_window->update_buttons();
     return 1;
 }
 
 
 
-Hollow::Hollow(int x, int y)
- : BC_Button(x, y, MWindow::mwindow->theme->get_image_set("hollow_brush"))
+Line::Line(int x, int y)
+ : BC_Toggle(x, 
+    y, 
+    MWindow::mwindow->theme->get_image_set("line"),
+    MWindow::mwindow->current_operation == DRAW_LINE)
 {
-    set_tooltip("Hollow brush");
+    set_tooltip("Line");
 }
 
-int Hollow::handle_event()
+int Line::handle_event()
 {
-    MWindow::mwindow->is_hollow = 0;
-    hide_window();
-    MenuWindow::menu_window->filled->show_window();
+    if(get_value())
+    {
+        MWindow::mwindow->enter_drawing(DRAW_LINE);
+    }
+    else
+    {
+        MWindow::mwindow->exit_drawing();
+    }
+    MenuWindow::menu_window->update_buttons();
     return 1;
 }
 
 
-Filled::Filled(int x, int y)
- : BC_Button(x, y, MWindow::mwindow->theme->get_image_set("filled_brush"))
+
+
+Circle::Circle(int x, int y)
+ : BC_Toggle(x, 
+    y, 
+    MWindow::mwindow->theme->get_image_set("circle"),
+    MWindow::mwindow->current_operation == DRAW_CIRCLE)
 {
-    set_tooltip("Filled brush");
+    set_tooltip("Circle");
 }
 
-int Filled::handle_event()
+int Circle::handle_event()
 {
-    MWindow::mwindow->is_hollow = 1;
-    hide_window();
-    MenuWindow::menu_window->hollow->show_window();
+    if(get_value())
+    {
+        MWindow::mwindow->enter_drawing(DRAW_CIRCLE);
+    }
+    else
+    {
+        MWindow::mwindow->exit_drawing();
+    }
+    MenuWindow::menu_window->update_buttons();
     return 1;
 }
+
+
+
+
+Disc::Disc(int x, int y)
+ : BC_Toggle(x, 
+    y, 
+    MWindow::mwindow->theme->get_image_set("disc"),
+    MWindow::mwindow->current_operation == DRAW_DISC)
+{
+    set_tooltip("Disc");
+}
+
+int Disc::handle_event()
+{
+    if(get_value())
+    {
+        MWindow::mwindow->enter_drawing(DRAW_DISC);
+    }
+    else
+    {
+        MWindow::mwindow->exit_drawing();
+    }
+    MenuWindow::menu_window->update_buttons();
+    return 1;
+}
+
+
+Box::Box(int x, int y)
+ : BC_Toggle(x, 
+    y, 
+    MWindow::mwindow->theme->get_image_set("box"),
+    MWindow::mwindow->current_operation == DRAW_BOX)
+{
+    set_tooltip("Disc");
+}
+
+int Box::handle_event()
+{
+    if(get_value())
+    {
+        MWindow::mwindow->enter_drawing(DRAW_BOX);
+    }
+    else
+    {
+        MWindow::mwindow->exit_drawing();
+    }
+    MenuWindow::menu_window->update_buttons();
+    return 1;
+}
+
+
 
 
 Top::Top(int x, int y)
@@ -611,8 +679,22 @@ void MenuWindow::create_objects()
     x += window->get_w();
     add_tool(window = new NextPage(x, y));
     x += window->get_w();
-    add_tool(hollow = new Hollow(x, y));
-    add_tool(filled = new Filled(x, y));
+    add_tool(line = new Line(x, y));
+    x += line->get_w();
+    add_tool(circle = new Circle(x, y));
+
+    x = x1;
+    y += circle->get_h();
+    add_tool(disc = new Disc(x, y));
+    x += disc->get_w();
+    add_tool(box = new Box(x, y));
+    x += box->get_w();
+    add_tool(top = new Top(x, y));
+    add_tool(bottom = new Bottom(x, y));
+
+    x += top->get_w() + margin;
+    add_tool(top_color = new TopColor(x, y));
+    add_tool(bottom_color = new BottomColor(x, y));
 
 
 
@@ -636,12 +718,6 @@ void MenuWindow::create_objects()
 
     y += window->get_h();
     x = x1;
-    add_tool(top = new Top(x, y));
-    add_tool(bottom = new Bottom(x, y));
-
-    x += top->get_w() + margin;
-    add_tool(top_color = new TopColor(x, y));
-    add_tool(bottom_color = new BottomColor(x, y));
 
     unlock_window();
 }
@@ -662,16 +738,10 @@ void MenuWindow::update_buttons()
 {
     draw->set_value(MWindow::mwindow->current_operation == DRAWING);
     erase->set_value(MWindow::mwindow->current_operation == ERASING);
-
-    if(MWindow::mwindow->is_hollow)
-    {
-        filled->hide_window();
-    }
-    else
-    {
-        hollow->hide_window();
-    }
-
+    line->set_value(MWindow::mwindow->current_operation == DRAW_LINE);
+    circle->set_value(MWindow::mwindow->current_operation == DRAW_CIRCLE);
+    disc->set_value(MWindow::mwindow->current_operation == DRAW_DISC);
+    box->set_value(MWindow::mwindow->current_operation == DRAW_BOX);
     if(MWindow::mwindow->is_top)
     {
         bottom->hide_window();

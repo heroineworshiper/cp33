@@ -22,18 +22,20 @@
 #include "cursors.h"
 #include "keys.h"
 #include "reader.h"
-#include "readerbrushes.h"
+//#include "readerbrushes.h"
 #include "readermenu.h"
 #include "readertheme.h"
 #include "readerwindow.h"
 #include <string.h>
+#include <unistd.h>
 
 
 MWindow* MWindow::mwindow = 0;
 const uint32_t MWindow::top_colors[TOTAL_COLORS] = 
 {
+    0xffffff, // white/erase
     0x000000, // black
-    0x808080, // grey
+    0x404040, // grey
     0xff0000, // red
     0xcc44cc, // purple
     0x00ff00, // green
@@ -43,8 +45,9 @@ const uint32_t MWindow::top_colors[TOTAL_COLORS] =
 
 const uint32_t MWindow::bottom_colors[TOTAL_COLORS] = 
 {
+    0xffffff, // white/erase
     0xeeee77, // yellow
-    0xbbbbbb, // light grey
+    0xc0c0c0, // light grey
     0xff7777, // light red
     0xaaffee, // cyan
     0xaaff66, // light green
@@ -88,10 +91,10 @@ void MWindow::init_colors()
 // index 0 is always transparent
     for(int i = 0; i < TOTAL_COLORS; i++)
     {
-        to_rgb888(&top_rgb888[3 + i * 3], top_colors[i]);
-        to_rgb888(&bottom_rgb888[3 + i * 3], bottom_colors[i]);
-        to_rgb565(&top_rgb565[1 + i], top_colors[i]);
-        to_rgb565(&bottom_rgb565[1 + i], bottom_colors[i]);
+        to_rgb888(&top_rgb888[i * 3], top_colors[i]);
+        to_rgb888(&bottom_rgb888[i * 3], bottom_colors[i]);
+        to_rgb565(&top_rgb565[i], top_colors[i]);
+        to_rgb565(&bottom_rgb565[i], bottom_colors[i]);
     }
 }
 
@@ -103,6 +106,15 @@ void MWindow::create_objects()
     theme = new ReaderTheme;
     theme->initialize();
     get_resources()->bg_color = WHITE;
+
+    oval_table[0] = 0;
+    for(int i = 1; i < OVAL_BASE; i++)
+    {
+// solve pythagorean therum for Y axis & scale to 0-1
+        int j = (OVAL_BASE - 1 - i);
+        oval_table[i] = sqrt(OVAL_BASE * OVAL_BASE - j * j) / OVAL_BASE;
+//printf("MWindow::create_objects %d %f\n", __LINE__, oval_table[i]);
+    }
 
     create_window("Reader", // title
         0, // x
@@ -591,7 +603,7 @@ void MWindow::show_page_fragment(int number,
                 get_color_model());
             break;
     }
-    
+
     int cursor_x2 = cursor_x;
     int cursor_y2 = cursor_y;
     hide_cursor();
@@ -670,6 +682,22 @@ int MWindow::button_press_event()
             return 1;
             break;
         
+        case DRAW_LINE:
+        case DRAW_CIRCLE:
+        case DRAW_DISC:
+        case DRAW_BOX:
+            if(polygon_state == POLYGON_IDLE)
+            {
+// start the polygon
+                hide_cursor();
+                polygon_state = POLYGON_CLICK1;
+                polygon_x1 = get_cursor_x();
+                polygon_y1 = get_cursor_y();
+                update_cursor(polygon_x1, polygon_y1);
+            }
+            return 1;
+            break;
+        
         default:
             return 0;
             break;
@@ -688,6 +716,46 @@ int MWindow::button_release_event()
         
         case ERASING:
             push_undo_after();
+            return 1;
+            break;
+        
+        case DRAW_LINE:
+        case DRAW_CIRCLE:
+        case DRAW_DISC:
+        case DRAW_BOX:
+            if(polygon_state == POLYGON_CLICK1)
+            {
+                polygon_state = POLYGON_CLICK2;
+            }
+            else
+            if(polygon_state == POLYGON_CLICK2)
+            {
+// finish the polygon
+                update_save();
+                hide_cursor();
+                push_undo_before();
+                
+                if(current_operation == DRAW_LINE)
+                {
+                    segment_x = polygon_x1;
+                    segment_y = polygon_y1;
+                    draw_segment(0);
+                }
+                else
+                if(current_operation == DRAW_BOX)
+                {
+                    finish_box();
+                }
+                else
+                {
+                    finish_oval();
+                }
+                
+                polygon_state = POLYGON_IDLE;
+                push_undo_after();
+                update_cursor(get_cursor_x(), get_cursor_y());
+                flush();
+            }
             return 1;
             break;
     }
@@ -761,6 +829,12 @@ int MWindow::button_release_event()
 int MWindow::cursor_motion_event()
 {
     int need_cursor = 0;
+    if(!cursor_entered)
+    {
+// motion event happened after cursor left
+        return 0;
+    }
+
     switch(current_operation)
     {
         case DRAWING:
@@ -781,13 +855,24 @@ int MWindow::cursor_motion_event()
             }
             need_cursor = 1;
             break;
+        
+        case DRAW_LINE:
+        case DRAW_CIRCLE:
+        case DRAW_DISC:
+        case DRAW_BOX:
+// draw the outline without drawing anything
+            need_cursor = 1;
+            break;
     }
     
     if(need_cursor)
     {
+//printf("MWindow::cursor_motion_event %d %d\n", __LINE__, is_event_win());
         update_cursor(get_cursor_x(), get_cursor_y());
-//printf("MWindow::cursor_motion_event %d\n", __LINE__);
         flush();
+// the raspberry pi accumulates drawing commands after the flush, so we need
+// to wait for it to finish
+        sync_display();
 //printf("MWindow::cursor_motion_event %d\n", __LINE__);
     }
     return 1;
@@ -798,30 +883,26 @@ int MWindow::cursor_leave_event()
 //printf("MWindow::cursor_leave_event %d\n", __LINE__);
     hide_cursor();
     flush();
+    cursor_entered = 0;
     return 1;
 }
 
 int MWindow::cursor_enter_event()
 {
-//     printf("MWindow::cursor_enter_event %d %d %d %d\n", 
-//         __LINE__, 
-//         is_event_win(),
-//         get_cursor_x(), 
-//         get_cursor_y());
     if(is_event_win() &&
-        (current_operation == DRAWING ||
-        current_operation == ERASING))
+        current_operation != IDLE)
     {
+//printf("MWindow::cursor_enter_event %d\n", __LINE__);
         update_cursor(get_cursor_x(), get_cursor_y());
         flush();
+        cursor_entered = 1;
         return 1;
     }
     return 0;
 }
 
 
-void MWindow::draw_brush(VFrame *brush, 
-    VFrame *dst, 
+void MWindow::draw_brush(VFrame *dst, 
     int x, 
     int y, 
     uint8_t erase_mask,
@@ -834,25 +915,20 @@ void MWindow::draw_brush(VFrame *brush,
     int y1 = y - brush_size / 2;
     int i;
     int j;
-    
+
     for(i = 0; i < brush_size; i++)
     {
         if(y1 + i >= 0 && y1 + i < dst_h)
         {
             uint8_t *dst_row = (uint8_t*)dst->get_rows()[y1 + i] + x1;
-            uint8_t *src_row = (uint8_t*)brush->get_rows()[i];
             for(j = 0; j < brush_size; j++)
             {
                 if(x1 + j >= 0 && x1 + j < dst_w)
                 {
-                    if(*src_row)
-                    {
-                        *dst_row &= erase_mask;
-                        *dst_row |= draw_mask;
-                    }
+                    *dst_row &= erase_mask;
+                    *dst_row |= draw_mask;
                 }
                 dst_row++;
-                src_row++;
             }
         }
     }
@@ -866,9 +942,8 @@ void MWindow::draw_segment(int erase)
     }
 
     Page *page = pages.get(current_page);
-    Brush *brush;
     int brush_size;
-    if(current_operation == DRAWING)
+    if(current_operation != ERASING)
     {
         brush_size = draw_size;
     }
@@ -876,18 +951,7 @@ void MWindow::draw_segment(int erase)
     {
         brush_size = erase_size;
     }
-    if(is_hollow &&
-        current_operation == DRAWING)
-    {
-        brush = outline_brushes.get(brush_size - 1);
-    }
-    else
-    {
-        brush = solid_brushes.get(brush_size - 1);
-    }
 
-
-    VFrame *brush_image = brush->image;
     VFrame *annotations = page->annotations;
     int is_erase = (current_operation == ERASING);
     int x1 = segment_x;
@@ -898,36 +962,11 @@ void MWindow::draw_segment(int erase)
 	int y_diff = labs(y2 - y1);
     uint8_t erase_mask;
     uint8_t draw_mask;
-
-    if(is_top)
-    {
-        erase_mask = 0x0f;
-        if(current_operation == ERASING)
-        {
-            draw_mask = 0;
-        }
-        else
-        {
-            draw_mask = (top_color + 1) << 4;
-        }
-    }
-    else
-    {
-        erase_mask = 0xf0;
-        if(current_operation == ERASING)
-        {
-            draw_mask = 0;
-        }
-        else
-        {
-            draw_mask = (bottom_color + 1);
-        }
-    }
+    compute_masks(&erase_mask, &draw_mask);
 
     if(!x_diff && !y_diff)
     {
-        draw_brush(brush_image, 
-            annotations, 
+        draw_brush(annotations, 
             segment_x, 
             segment_y, 
             erase_mask,
@@ -952,8 +991,7 @@ void MWindow::draw_segment(int erase)
 		for(int i = x1; i <= x2; i++)
 		{
 			int y = y1 + (int64_t)(i - x1) * (int64_t)n / (int64_t)d;
-			draw_brush(brush_image, 
-                annotations, 
+			draw_brush(annotations, 
                 i, 
                 y, 
                 erase_mask,
@@ -978,8 +1016,7 @@ void MWindow::draw_segment(int erase)
 		for(int i = y1; i <= y2; i++)
 		{
 			int x = x1 + (int64_t)(i - y1) * (int64_t)n / (int64_t)d;
-			draw_brush(brush_image, 
-                annotations, 
+			draw_brush(annotations, 
                 x, 
                 i, 
                 erase_mask,
@@ -1013,6 +1050,298 @@ void MWindow::draw_segment(int erase)
     segment_y = get_cursor_y();
 }
 
+void MWindow::draw_pixel(uint8_t **rows, 
+    int x, 
+    int y, 
+    uint8_t erase_mask, 
+    uint8_t draw_mask)
+{
+    CLAMP(x, 0, root_w - 1);
+    CLAMP(y, 0, root_h - 1);
+    uint8_t *dst_row = rows[y] + x;
+    *dst_row &= erase_mask;
+    *dst_row |= draw_mask;
+}
+
+void MWindow::compute_masks(uint8_t *erase_mask, uint8_t *draw_mask)
+{
+    if(is_top)
+    {
+        *erase_mask = 0x0f;
+        if(current_operation == ERASING ||
+            top_color == 0)
+        {
+            *draw_mask = 0;
+        }
+        else
+        {
+            *draw_mask = top_color << 4;
+        }
+    }
+    else
+    {
+        *erase_mask = 0xf0;
+        if(current_operation == ERASING ||
+            bottom_color == 0)
+        {
+            *draw_mask = 0;
+        }
+        else
+        {
+            *draw_mask = bottom_color;
+        }
+    }
+}
+
+void MWindow::finish_box()
+{
+    if(current_page >= pages.size())
+    {
+        return;
+    }
+
+    Page *page = pages.get(current_page);
+    VFrame *annotations = page->annotations;
+    uint8_t erase_mask;
+    uint8_t draw_mask;
+    compute_masks(&erase_mask, &draw_mask);
+    
+    int x1 = MIN(polygon_x1, get_cursor_x());
+    int y1 = MIN(polygon_y1, get_cursor_y());
+    int x2 = MAX(polygon_x1, get_cursor_x());
+    int y2 = MAX(polygon_y1, get_cursor_y());
+    CLAMP(x1, 0, root_w);
+    CLAMP(x2, 0, root_w);
+    CLAMP(y1, 0, root_h);
+    CLAMP(y2, 0, root_h);
+    uint8_t **rows = (uint8_t**)annotations->get_rows();
+    for(int i = y1; i < y2; i++)
+    {
+        uint8_t *row = rows[i] + x1;
+        for(int j = x1; j < x2; j++)
+        {
+            *row &= erase_mask;
+            *row |= draw_mask;
+            row++;
+        }
+    }
+
+    show_page_fragment(current_page,
+        x1 - 1,
+        y1 - 1,
+        x2 + 1,
+        y2 + 1,
+        0);
+}
+
+
+void MWindow::finish_oval()
+{
+    if(current_page >= pages.size())
+    {
+        return;
+    }
+
+    Page *page = pages.get(current_page);
+    VFrame *annotations = page->annotations;
+    uint8_t erase_mask;
+    uint8_t draw_mask;
+
+    compute_masks(&erase_mask, &draw_mask);
+    
+    int x1 = MIN(polygon_x1, get_cursor_x());
+    int y1 = MIN(polygon_y1, get_cursor_y());
+    int x2 = MAX(polygon_x1, get_cursor_x());
+    int y2 = MAX(polygon_y1, get_cursor_y());
+    int brush_size = this->draw_size;
+
+    int x_axis = (x2 - x1) / 2;
+    int y_axis = (y2 - y1) / 2;
+    if(current_operation == DRAW_DISC)
+    {
+        uint8_t **rows = (uint8_t**)annotations->get_rows();
+        brush_size = 1;
+// center column
+        for(int j = y1; j <= y1 + y_axis * 2; j++)
+        {
+            draw_pixel(rows, 
+                x1 + x_axis, 
+                j, 
+                erase_mask, 
+                draw_mask);
+        }
+
+        for(int i = 0; i < x_axis; i++)
+        {
+            int y3 = calculate_oval(i + 1, x_axis, y_axis);
+            for(int j = 0; j <= y3; j++)
+            {
+                draw_pixel(rows, 
+                    x1 + i, 
+                    y1 + y_axis - j, 
+                    erase_mask, 
+                    draw_mask);
+                draw_pixel(rows, 
+                    x1 + i, 
+                    y1 + y_axis + j, 
+                    erase_mask, 
+                    draw_mask);
+                draw_pixel(rows, 
+                    x2 - 1 - i, 
+                    y1 + y_axis - j, 
+                    erase_mask, 
+                    draw_mask);
+                draw_pixel(rows, 
+                    x2 - 1 - i, 
+                    y1 + y_axis + j, 
+                    erase_mask, 
+                    draw_mask);
+            }
+        }
+    }
+    else
+    {
+// center column
+        draw_brush(annotations, 
+            x1 + x_axis, 
+            y1, 
+            erase_mask,
+            draw_mask,
+            draw_size);
+        draw_brush(annotations, 
+            x1 + x_axis, 
+            y1 + y_axis * 2, 
+            erase_mask,
+            draw_mask,
+            draw_size);
+
+        for(int i = 0; i < x_axis; i++)
+        {
+            int y3 = calculate_oval(i, x_axis, y_axis);
+            int y4 = calculate_oval(i + 1, x_axis, y_axis);
+            if(y4 <= y3 + 1)
+            {
+                draw_brush(annotations, 
+                    x1 + i, 
+                    y1 + y_axis - y3, 
+                    erase_mask,
+                    draw_mask,
+                    draw_size);
+                draw_brush(annotations, 
+                    x1 + i, 
+                    y1 + y_axis + y3, 
+                    erase_mask,
+                    draw_mask,
+                    draw_size);
+                draw_brush(annotations, 
+                    x2 - 1 - i, 
+                    y1 + y_axis - y3, 
+                    erase_mask,
+                    draw_mask,
+                    draw_size);
+                draw_brush(annotations, 
+                    x2 - 1 - i, 
+                    y1 + y_axis + y3, 
+                    erase_mask,
+                    draw_mask,
+                    draw_size);
+            }
+            else
+            {
+                for(int j = y3; j < y4; j++)
+                {
+                    draw_brush(annotations, 
+                        x1 + i, 
+                        y1 + y_axis - j, 
+                        erase_mask,
+                        draw_mask,
+                        draw_size);
+                    draw_brush(annotations, 
+                        x1 + i, 
+                        y1 + y_axis + j, 
+                        erase_mask,
+                        draw_mask,
+                        draw_size);
+                    draw_brush(annotations, 
+                        x2 - 1 - i, 
+                        y1 + y_axis - j, 
+                        erase_mask,
+                        draw_mask,
+                        draw_size);
+                    draw_brush(annotations, 
+                        x2 - 1 - i, 
+                        y1 + y_axis + j, 
+                        erase_mask,
+                        draw_mask,
+                        draw_size);
+                }
+            }
+        }
+    }
+
+    show_page_fragment(current_page,
+        x1 - brush_size / 2 - 1,
+        y1 - brush_size / 2 - 1,
+        x2 + brush_size / 2 + 1,
+        y2 + brush_size / 2 + 1,
+        0);
+}
+
+int MWindow::calculate_oval(int x, int x_axis, int y_axis)
+{
+    if(x == 0)
+    {
+        return 0;
+    }
+
+    float x_f = (float)x * OVAL_BASE / x_axis;
+    int index1 = (int)floor(x_f);
+    int index2 = (int)floor(x_f + 1);
+// printf("MWindow::calculate_oval %d x_f=%f index1=%d index2=%d\n", 
+// __LINE__,
+// x_f,
+// index1,
+// index2);
+    CLAMP(index1, 0, OVAL_BASE - 1);
+    CLAMP(index2, 0, OVAL_BASE - 1);
+    float y1 = oval_table[index1];
+    float y2 = oval_table[index2];
+    if(index1 == index2)
+    {
+        return (int)(0.5 + y1 * y_axis);
+    }
+    else
+    {
+        return (int)(0.5 + y_axis * (y1 * (x_f - index1) + y2 * (index2 - x_f)));
+    }
+}
+
+void MWindow::draw_oval_preview(int x1, int y1, int x2, int y2)
+{
+    int x_axis = (x2 - x1) / 2;
+    int y_axis = (y2 - y1) / 2;
+    for(int i = 0; i < x_axis; i++)
+    {
+        int y3 = calculate_oval(i, x_axis, y_axis);
+        int y4 = calculate_oval(i + 1, x_axis, y_axis);
+        if(y4 <= y3 + 1)
+        {
+            draw_fg_pixel(x1 + i, y1 + y_axis - y3);
+            draw_fg_pixel(x1 + i, y1 + y_axis + y3);
+            draw_fg_pixel(x2 - 1 - i, y1 + y_axis - y3);
+            draw_fg_pixel(x2 - 1 - i, y1 + y_axis + y3);
+        }
+        else
+        {
+            y4--;
+            draw_fg_line(x1 + i, y1 + y_axis - y3, x1 + i, y1 + y_axis - y4);
+            draw_fg_line(x1 + i, y1 + y_axis + y3, x1 + i, y1 + y_axis + y4);
+            draw_fg_line(x2 - 1 - i, y1 + y_axis - y3, x2 - 1 - i, y1 + y_axis - y4);
+            draw_fg_line(x2 - 1 - i, y1 + y_axis + y3, x2 - 1 - i, y1 + y_axis + y4);
+        }
+    }
+}
+
 void MWindow::draw_cursor()
 {
     int margin = 5;
@@ -1020,40 +1349,211 @@ void MWindow::draw_cursor()
     set_color(WHITE);
     set_inverse();
 
-    Brush *brush;
-    Brush *hollow_brush;
+
+//usleep(100000);
+
     int brush_size;
-    if(current_operation == DRAWING)
+    if(current_operation == DRAWING ||
+        current_operation == DRAW_LINE ||
+        current_operation == DRAW_CIRCLE ||
+        current_operation == DRAW_RECT)
     {
         brush_size = draw_size;
+    }
+    else
+    if(current_operation == DRAW_DISC ||
+        current_operation == DRAW_BOX)
+    {
+        brush_size = 1;
     }
     else
     {
         brush_size = erase_size;
     }
-    if(is_hollow)
+
+// draw the square
+    int topleft = brush_size / 2;
+    int bottomright = brush_size / 2;
+    if(!(brush_size % 2))
     {
-        brush = outline_brushes.get(brush_size - 1);
+        bottomright -= 1;
+    }
+
+// draw polygon previews
+    if(polygon_state != POLYGON_IDLE)
+    {
+        switch(current_operation)
+        {
+            case DRAW_LINE:
+            {
+                if(brush_size == 1)
+                {
+                    draw_fg_line(polygon_x1, 
+                        polygon_y1, 
+                        cursor_x, 
+                        cursor_y);
+                }
+                else
+                {
+                    int x1 = polygon_x1;
+                    int y1 = polygon_y1;
+                    int x2 = cursor_x;
+                    int y2 = cursor_y;
+                    if(x2 < x1)
+                    {
+                        int temp = x1;
+                        x1 = x2;
+                        x2 = temp;
+                        temp = y1;
+                        y1 = y2;
+                        y2 = temp;
+                    }
+
+                    if(y2 > y1)
+                    {
+                        draw_fg_line(x1 - topleft, 
+                            y1 - topleft, 
+                            x1 + bottomright, 
+                            y1 - topleft);
+                        draw_fg_line(x1 - topleft, 
+                            y1 - topleft, 
+                            x1 - topleft, 
+                            y1 + bottomright);
+                        draw_fg_line(x2 + bottomright, 
+                            y2 + bottomright, 
+                            x2 + bottomright, 
+                            y2 - topleft);
+                        draw_fg_line(x2 + bottomright, 
+                            y2 + bottomright, 
+                            x2 - topleft, 
+                            y2 + bottomright);
+                        draw_fg_line(x1 + bottomright, 
+                            y1 - topleft,
+                            x2 + bottomright, 
+                            y2 - topleft);
+                        draw_fg_line(x1 - topleft, 
+                            y1 + bottomright,
+                            x2 - topleft, 
+                            y2 + bottomright);
+                    }
+                    else
+                    {
+                        draw_fg_line(x1 - topleft, 
+                            y1 + bottomright, 
+                            x1 + bottomright, 
+                            y1 + bottomright);
+                        draw_fg_line(x1 - topleft, 
+                            y1 + bottomright, 
+                            x1 - topleft, 
+                            y1 - topleft);
+                        draw_fg_line(x2 + bottomright, 
+                            y2 - topleft, 
+                            x2 - topleft, 
+                            y2 - topleft);
+                        draw_fg_line(x2 + bottomright, 
+                            y2 - topleft, 
+                            x2 + bottomright, 
+                            y2 + bottomright);
+                        draw_fg_line(x1 - topleft, 
+                            y1 - topleft,
+                            x2 - topleft, 
+                            y2 - topleft);
+                        draw_fg_line(x1 + bottomright, 
+                            y1 + bottomright,
+                            x2 + bottomright, 
+                            y2 + bottomright);
+                    }
+                }
+                break;
+            }
+            
+            
+            case DRAW_RECT:
+            case DRAW_BOX:
+                draw_fg_line(polygon_x1, 
+                    polygon_y1, 
+                    cursor_x, 
+                    polygon_y1);
+                draw_fg_line(cursor_x, 
+                    polygon_y1, 
+                    cursor_x, 
+                    cursor_y);
+                draw_fg_line(cursor_x, 
+                    cursor_y, 
+                    polygon_x1, 
+                    cursor_y);
+                draw_fg_line(polygon_x1, 
+                    cursor_y, 
+                    polygon_x1, 
+                    polygon_y1);
+                break;
+            
+            case DRAW_DISC:
+            case DRAW_CIRCLE:
+            {
+                int x1 = MIN(polygon_x1, cursor_x);
+                int y1 = MIN(polygon_y1, cursor_y);
+                int x2 = MAX(polygon_x1, cursor_x);
+                int y2 = MAX(polygon_y1, cursor_y);
+                
+                if(current_operation == DRAW_CIRCLE)
+                {
+                    draw_oval_preview(x1 - topleft, 
+                        y1 - topleft, 
+                        x2 + topleft, 
+                        y2 + topleft);
+                    if(brush_size > 1)
+                    {
+                        draw_oval_preview(x1 + bottomright, 
+                            y1 + bottomright, 
+                            x2 - bottomright, 
+                            y2 - bottomright);
+                    }
+                }
+                else
+                {
+// disc ignores brush size
+                    draw_oval_preview(x1, 
+                        y1, 
+                        x2, 
+                        y2);
+                }
+                break;
+            }
+        }
     }
     else
     {
-        brush = solid_brushes.get(brush_size - 1);
-    }
-    hollow_brush = outline_brushes.get(brush_size - 1);
-
-    uint8_t **rows = (uint8_t**)hollow_brush->image->get_rows();
-    for(int i = 0; i < brush_size; i++)
-    {
-        for(int j = 0; j < brush_size; j++)
+// draw the brush
+        if(brush_size == 1)
         {
-            if(rows[i][j])
+            draw_fg_pixel(cursor_x, cursor_y);
+        }
+        else
+        {
+            for(int i = 0; i < brush_size; i++)
             {
-                draw_fg_pixel(cursor_x - brush_size / 2 + j, 
-                    cursor_y - brush_size / 2 + i);
+    // top side
+                draw_fg_pixel(cursor_x - topleft + i, 
+                    cursor_y - topleft);
+    // bottom side
+                draw_fg_pixel(cursor_x - topleft + i, 
+                    cursor_y + bottomright);
+            }
+
+            for(int i = 1; i < brush_size - 1; i++)
+            {
+    // left side
+                draw_fg_pixel(cursor_x - topleft, 
+                    cursor_y - topleft + i);
+    // right side
+                draw_fg_pixel(cursor_x + bottomright, 
+                    cursor_y - topleft + i);
             }
         }
     }
 
+// the crosshair
     set_line_dashes(1);
     draw_fg_line(0, 
         cursor_y, 
@@ -1079,19 +1579,17 @@ void MWindow::update_cursor(int x, int y)
 {
     hide_cursor();
 
-    if(current_operation == DRAWING ||
-        current_operation == ERASING)
+    if(current_operation != IDLE)
     {
 // show new cursor position
         cursor_x = x;
         cursor_y = y;
-        if((current_operation == ERASING ||
-            current_operation == DRAWING) &&
+        if(current_operation != IDLE &&
             x >= 0 && 
             y >= 0)
         {
-//printf("MWindow::update_cursor %d\n", __LINE__);
             draw_cursor();
+//printf("MWindow::update_cursor %d\n", __LINE__);
             cursor_visible = 1;
         }
     }
@@ -1102,8 +1600,8 @@ void MWindow::hide_cursor()
     if(cursor_visible)
     {
 // hide previous cursor position
-//printf("MWindow::hide_cursor %d\n", __LINE__);
         draw_cursor();
+//printf("MWindow::hide_cursor %d\n", __LINE__);
         cursor_visible = 0;
         cursor_x = -1;
         cursor_y = -1;
@@ -1114,12 +1612,14 @@ void MWindow::hide_cursor()
 void MWindow::enter_drawing(int current_operation)
 {
     this->current_operation = current_operation;
+    polygon_state = POLYGON_IDLE;
     set_cursor(TRANSPARENT_CURSOR, 0, 0);
 }
 
 void MWindow::exit_drawing()
 {
     this->current_operation = IDLE;
+    polygon_state = POLYGON_IDLE;
     set_cursor(ARROW_CURSOR, 0, 0);
     hide_cursor();
 }

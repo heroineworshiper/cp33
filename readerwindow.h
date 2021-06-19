@@ -58,13 +58,22 @@ public:
 // draw a line with the brush
     void draw_segment(int erase);
 // draw a single brush position
-    void draw_brush(VFrame *brush, 
-        VFrame *dst, 
+    void draw_brush(VFrame *dst, 
         int x, 
         int y, 
         uint8_t erase_mask,
         uint8_t draw_mask,
         int brush_size);
+    int calculate_oval(int x, int x_axis, int y_axis);
+    void draw_oval_preview(int x1, int y1, int x2, int y2);
+    void finish_box();
+    void finish_oval();
+    void draw_pixel(uint8_t **rows, 
+        int x, 
+        int y, 
+        uint8_t erase_mask, 
+        uint8_t draw_mask);
+    void compute_masks(uint8_t *erase_mask, uint8_t *draw_mask);
 
     void reset_undo();
     void push_undo_before();
@@ -86,11 +95,21 @@ public:
     int is_hollow;
     int current_operation;
     int cursor_visible;
+// motion & leave events are out of order because of event compression
+    int cursor_entered;
     int cursor_x;
     int cursor_y;
 // end of last segment
     int segment_x;
     int segment_y;
+// start of polygon
+    int polygon_x1;
+    int polygon_y1;
+    int polygon_state;
+#define POLYGON_IDLE 0
+#define POLYGON_CLICK1 1
+#define POLYGON_CLICK2 2
+
     int current_undo;
     int total_undos;
     VFrame *undo_before[UNDO_LEVELS];
@@ -109,6 +128,8 @@ public:
     static uint8_t bottom_rgb888[(TOTAL_COLORS + 1) * 3];
     static uint16_t top_rgb565[TOTAL_COLORS + 1];
     static uint16_t bottom_rgb565[TOTAL_COLORS + 1];
+#define OVAL_BASE 1024
+    float oval_table[OVAL_BASE];
 };
 
 

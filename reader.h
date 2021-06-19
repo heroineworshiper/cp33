@@ -74,6 +74,11 @@
 #define IDLE 0
 #define DRAWING 1
 #define ERASING 2
+#define DRAW_LINE 3
+#define DRAW_CIRCLE 4
+#define DRAW_DISC 5
+#define DRAW_RECT 6
+#define DRAW_BOX 7
 
 extern int client_mode;
 extern char reader_path[BCTEXTLEN];
@@ -81,6 +86,7 @@ extern int file_changed;
 extern int current_page;
 
 int save_annotations();
+int save_annotations_entry();
 int load_annotations();
 int load_file(char *path);
 void load_file_entry(char *path);

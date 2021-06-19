@@ -7,31 +7,32 @@ CXXFLAGS += -DUSE_WINDOW
 endif
 
 PNGS := \
-	images/button_up.png \
-	images/button_hi.png \
-	images/button_dn.png \
-	images/load.png \
-    images/redo.png \
-    images/undo.png \
-    images/prev_page.png \
-    images/next_page.png \
-    images/hollow_brush.png \
-    images/filled_brush.png \
-    images/check.png \
-    images/check_hi.png \
-    images/save.png \
-    images/save2.png \
-    images/erase.png \
     images/bottom_layer.png \
-    images/top_layer.png \
+	images/box.png \
+	images/button_dn.png \
+	images/button_hi.png \
+	images/button_up.png \
+    images/check_hi.png \
+    images/check.png \
+    images/circle.png \
     images/color.png \
+    images/disc.png \
     images/draw.png \
-    images/palette_bg.png
+    images/erase.png \
+    images/line.png \
+	images/load.png \
+    images/next_page.png \
+    images/palette_bg.png \
+    images/prev_page.png \
+    images/redo.png \
+    images/save2.png \
+    images/save.png \
+    images/top_layer.png \
+    images/undo.png \
 
 
 OBJS := \
 	reader.o \
-	readerbrushes.o \
     readermenu.o \
 	readertheme.o \
 	readerwindow.o

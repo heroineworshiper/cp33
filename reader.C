@@ -62,7 +62,7 @@
 
 
 #include "reader.h"
-#include "readerbrushes.h"
+//#include "readerbrushes.h"
 #include "readermenu.h"
 #include "readertheme.h"
 #include "readerwindow.h"
@@ -133,7 +133,7 @@ void next_page(int step, int lock_it)
 {
 //    printf("next_page %d\n", __LINE__);
 #ifdef TWO_PAGE
-    if(current_page < pages.size() - 2)
+    if(current_page < pages.size() - step)
     {
         MWindow::mwindow->reset_undo();
         current_page += step;
@@ -160,6 +160,10 @@ void prev_page(int step, int lock_it)
 #ifdef TWO_PAGE
         MWindow::mwindow->reset_undo();
         current_page -= step;
+        if(current_page < 0)
+        {
+            current_page = 0;
+        }
         int temp = current_page + 1;
         send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
         MWindow::mwindow->show_page(current_page, lock_it);
@@ -268,7 +272,7 @@ void* button_thread(void *ptr)
                 {
                     up_button.next_time = up_button.time + REPEAT2;
                 }
-                next_page(2);
+                next_page(2, 1);
             }
         }
         else
@@ -280,7 +284,7 @@ void* button_thread(void *ptr)
                 {
                     down_button.next_time = down_button.time + REPEAT2;
                 }
-                prev_page(2);
+                prev_page(2, 1);
             }
         }
         
@@ -577,6 +581,21 @@ int save_annotations()
     return 1;
 }
 
+int save_annotations_entry()
+{
+#ifdef TWO_PAGE
+    int result = save_annotations();
+    send_command(LOAD_ANNOTATIONS, 
+        0, 
+        0);
+    wait_command();
+#else
+    int result = save_annotations();
+#endif
+    return result;
+}
+
+
 int load_annotations()
 {
     char path[BCTEXTLEN];
@@ -754,7 +773,7 @@ int main(int argc, char *argv[])
 //    init_fb();
     BC_Resources::dpi = BASE_DPI;
     BC_Resources::override_dpi = 1;
-    init_brushes();
+//    init_brushes();
     MWindow::init_colors();
     MWindow::mwindow = new MWindow;
     MWindow::mwindow->create_objects();
@@ -802,10 +821,10 @@ int main(int argc, char *argv[])
 // #ifdef TWO_PAGE
 //         int temp = i + 1;
 //         send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
-//         MWindow::mwindow->show_page(i);
+//         MWindow::mwindow->show_page(i, 1);
 //         wait_command();
 // #else
-//         MWindow::mwindow->show_page(i);
+//         MWindow::mwindow->show_page(i, 1);
 // #endif
 //         i++;
 //         page_count++;

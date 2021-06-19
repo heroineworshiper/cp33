@@ -125,6 +125,9 @@ Compile it on a raspberry:
     make -f Makefile.reader
     scp reader pi2:
 
+The music files are .reader.gz.
+Both confusers need a /reader directory with all the music files.  The
+client needs to mount it over NFS.
 
 
 
