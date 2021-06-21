@@ -134,7 +134,7 @@ client needs to mount it over NFS.
 Run it on the client 1st:
 Xorg&
 export DISPLAY=:0
-./reader -c
+nohup ./reader -c >& /dev/null
 
 Run it on the server 2nd:
 xinit /usr/bin/fvwm2&
@@ -142,7 +142,9 @@ export DISPLAY=:0
 xinput
 xinput --list-props "PixArt USB Optical Mouse"
 xinput --set-prop "PixArt USB Optical Mouse" "libinput Accel Speed" -1
-./reader
+xinput --list-props "McLionhead Trackpad"
+xinput --set-prop "McLionhead Trackpad" "libinput Accel Speed" 0
+nohup ./reader >& /dev/null
 
 
 
