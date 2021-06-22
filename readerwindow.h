@@ -65,12 +65,22 @@ public:
         uint8_t draw_mask,
         int brush_size);
     int calculate_oval(int x, int x_axis, int y_axis);
-    void draw_oval_preview(int x1, int y1, int x2, int y2);
+    void draw_oval_preview(int x1, 
+        int y1, 
+        int x2, 
+        int y2, 
+        ArrayList<int> *preview_pixels);
     void finish_box();
     void finish_oval();
     void draw_pixel(uint8_t **rows, 
         int x, 
         int y, 
+        uint8_t erase_mask, 
+        uint8_t draw_mask);
+    void draw_line(uint8_t **rows, 
+        int x, 
+        int y1, 
+        int y2,
         uint8_t erase_mask, 
         uint8_t draw_mask);
     void compute_masks(uint8_t *erase_mask, uint8_t *draw_mask);
@@ -130,6 +140,15 @@ public:
     static uint16_t bottom_rgb565[TOTAL_COLORS + 1];
 #define OVAL_BASE 1024
     float oval_table[OVAL_BASE];
+// pixels from the last preview to be used for the final polygon
+    ArrayList<int> preview_pixels;
+    int outer_preview_offset;
+// zoom top left
+    int zoom_x;
+    int zoom_y;
+// 1 -> 1:1
+// 3 -> 3:1
+    int zoom_factor;
 };
 
 

@@ -660,6 +660,9 @@ int load_file(char *path)
     {
         current_page = 0;
         MWindow::mwindow->reset_undo();
+        MWindow::mwindow->zoom_x = 0;
+        MWindow::mwindow->zoom_y = 0;
+        MWindow::mwindow->zoom_factor = 1;
     }
 
     strcpy(reader_path, path);

@@ -66,6 +66,9 @@ MWindow::MWindow() : BC_Window()
     cursor_visible = 0;
     current_undo = 0;
     total_undos = 0;
+    zoom_x = 0;
+    zoom_y = 0;
+    zoom_factor = 1;
 
 //#ifndef USE_WINDOW
 //    set_border(0);
@@ -1070,6 +1073,25 @@ void MWindow::draw_pixel(uint8_t **rows,
     *dst_row |= draw_mask;
 }
 
+// draw a vertical line on the bitmap
+void MWindow::draw_line(uint8_t **rows, 
+    int x, 
+    int y1, 
+    int y2,
+    uint8_t erase_mask, 
+    uint8_t draw_mask)
+{
+    CLAMP(x, 0, root_w - 1);
+    CLAMP(y1, 0, root_h);
+    CLAMP(y2, 0, root_h);
+    for(int i = y1; i <= y2; i++)
+    {
+        uint8_t *dst_row = rows[i] + x;
+        *dst_row &= erase_mask;
+        *dst_row |= draw_mask;
+    }
+}
+
 void MWindow::compute_masks(uint8_t *erase_mask, uint8_t *draw_mask)
 {
     if(is_top)
@@ -1142,6 +1164,8 @@ void MWindow::finish_box()
 }
 
 
+
+
 void MWindow::finish_oval()
 {
     if(current_page >= pages.size())
@@ -1208,79 +1232,158 @@ void MWindow::finish_oval()
     }
     else
     {
-// center column
-        draw_brush(annotations, 
-            x1 + x_axis, 
-            y1, 
-            erase_mask,
-            draw_mask,
-            draw_size);
-        draw_brush(annotations, 
-            x1 + x_axis, 
-            y1 + y_axis * 2, 
-            erase_mask,
-            draw_mask,
-            draw_size);
-
-        for(int i = 0; i < x_axis; i++)
+// circle
+        uint8_t **rows = (uint8_t**)annotations->get_rows();
+        int topleft = brush_size / 2;
+        int bottomright = brush_size / 2;
+        if(!(brush_size % 2))
         {
-            int y3 = calculate_oval(i, x_axis, y_axis);
-            int y4 = calculate_oval(i + 1, x_axis, y_axis);
-            if(y4 <= y3 + 1)
+            bottomright -= 1;
+        }
+
+        if(brush_size == 1)
+        {
+            for(int i = 0; i < preview_pixels.size(); i += 10)
             {
-                draw_brush(annotations, 
-                    x1 + i, 
-                    y1 + y_axis - y3, 
-                    erase_mask,
-                    draw_mask,
-                    draw_size);
-                draw_brush(annotations, 
-                    x1 + i, 
-                    y1 + y_axis + y3, 
-                    erase_mask,
-                    draw_mask,
-                    draw_size);
-                draw_brush(annotations, 
-                    x2 - 1 - i, 
-                    y1 + y_axis - y3, 
-                    erase_mask,
-                    draw_mask,
-                    draw_size);
-                draw_brush(annotations, 
-                    x2 - 1 - i, 
-                    y1 + y_axis + y3, 
-                    erase_mask,
-                    draw_mask,
-                    draw_size);
+
+// left
+                int x3 = preview_pixels.get(i);
+// top
+                int y3 = preview_pixels.get(i + 1);
+                int y4 = preview_pixels.get(i + 2);
+// bottom
+                int y5 = preview_pixels.get(i + 3);
+                int y6 = preview_pixels.get(i + 4);
+                draw_line(rows, 
+                    x3, 
+                    y3, 
+                    y4,
+                    erase_mask, 
+                    draw_mask);
+                draw_line(rows, 
+                    x3, 
+                    y5, 
+                    y6,
+                    erase_mask, 
+                    draw_mask);
+
+// right
+                x3 = preview_pixels.get(i + 5);
+// top
+                y3 = preview_pixels.get(i + 6);
+                y4 = preview_pixels.get(i + 7);
+// bottom
+                y5 = preview_pixels.get(i + 8);
+                y6 = preview_pixels.get(i + 9);
+
+                draw_line(rows, 
+                    x3, 
+                    y3, 
+                    y4,
+                    erase_mask, 
+                    draw_mask);
+                draw_line(rows, 
+                    x3, 
+                    y5, 
+                    y6,
+                    erase_mask, 
+                    draw_mask);
             }
-            else
+        }
+        else
+        {
+// brush_size > 1
+            int inner_index = 0;
+            for(int outer_index = outer_preview_offset; 
+                outer_index < preview_pixels.size();
+                outer_index += 10)
             {
-                for(int j = y3; j < y4; j++)
+// left side
+                int x3 = preview_pixels.get(outer_index);
+// top
+                int y3 = preview_pixels.get(outer_index + 1);
+                int y4 = preview_pixels.get(outer_index + 2);
+// bottom
+                int y5 = preview_pixels.get(outer_index + 3);
+                int y6 = preview_pixels.get(outer_index + 4);
+
+// ovals overlap
+                if(inner_index < outer_preview_offset &&
+                    x3 >= preview_pixels.get(inner_index))
                 {
-                    draw_brush(annotations, 
-                        x1 + i, 
-                        y1 + y_axis - j, 
-                        erase_mask,
-                        draw_mask,
-                        draw_size);
-                    draw_brush(annotations, 
-                        x1 + i, 
-                        y1 + y_axis + j, 
-                        erase_mask,
-                        draw_mask,
-                        draw_size);
-                    draw_brush(annotations, 
-                        x2 - 1 - i, 
-                        y1 + y_axis - j, 
-                        erase_mask,
-                        draw_mask,
-                        draw_size);
-                    draw_brush(annotations, 
-                        x2 - 1 - i, 
-                        y1 + y_axis + j, 
-                        erase_mask,
-                        draw_mask,
-                        draw_size);
+// inner top
+                    int y7 = preview_pixels.get(inner_index + 1);
+                    int y8 = preview_pixels.get(inner_index + 2);
+// inner bottom
+                    int y9 = preview_pixels.get(inner_index + 3);
+                    int y10 = preview_pixels.get(inner_index + 4);
+                    draw_line(rows, 
+                        x3, 
+                        y3, 
+                        y8,
+                        erase_mask, 
+                        draw_mask);
+                    draw_line(rows, 
+                        x3, 
+                        y9, 
+                        y6,
+                        erase_mask, 
+                        draw_mask);
+                }
+                else
+// outer oval only
+                {
+                    draw_line(rows, 
+                        x3, 
+                        y3, 
+                        y6,
+                        erase_mask, 
+                        draw_mask);
+                }
+
+// right side
+                x3 = preview_pixels.get(outer_index + 5);
+// top
+                y3 = preview_pixels.get(outer_index + 6);
+                y4 = preview_pixels.get(outer_index + 7);
+// bottom
+                y5 = preview_pixels.get(outer_index + 8);
+                y6 = preview_pixels.get(outer_index + 9);
+
+
+// ovals overlap
+                if(inner_index < outer_preview_offset &&
+                    x3 <= preview_pixels.get(inner_index + 5))
+                {
+// inner top
+                    int y7 = preview_pixels.get(inner_index + 6);
+                    int y8 = preview_pixels.get(inner_index + 7);
+// inner bottom
+                    int y9 = preview_pixels.get(inner_index + 8);
+                    int y10 = preview_pixels.get(inner_index + 9);
+                    draw_line(rows, 
+                        x3, 
+                        y3, 
+                        y8,
+                        erase_mask, 
+                        draw_mask);
+                    draw_line(rows, 
+                        x3, 
+                        y9, 
+                        y6,
+                        erase_mask, 
+                        draw_mask);
+                    inner_index += 10;
+                }
+                else
+// outer oval only
+                {
+                    draw_line(rows, 
+                        x3, 
+                        y3, 
+                        y6,
+                        erase_mask, 
+                        draw_mask);
                 }
             }
         }
@@ -1323,16 +1426,21 @@ int MWindow::calculate_oval(int x, int x_axis, int y_axis)
     }
 }
 
-void MWindow::draw_oval_preview(int x1, int y1, int x2, int y2)
+void MWindow::draw_oval_preview(int x1, 
+    int y1, 
+    int x2, 
+    int y2,
+    ArrayList<int> *preview_pixels)
 {
     int x_axis = (x2 - x1) / 2;
     int y_axis = (y2 - y1) / 2;
-    for(int i = 0; i < x_axis; i++)
+    for(int i = 0; i <= x_axis; i++)
     {
         int y3 = calculate_oval(i, x_axis, y_axis);
         int y4 = calculate_oval(i + 1, x_axis, y_axis);
         if(y4 <= y3 + 1)
         {
+            y4 = y3;
             draw_fg_pixel(x1 + i, y1 + y_axis - y3);
             draw_fg_pixel(x1 + i, y1 + y_axis + y3);
             draw_fg_pixel(x2 - 1 - i, y1 + y_axis - y3);
@@ -1345,6 +1453,22 @@ void MWindow::draw_oval_preview(int x1, int y1, int x2, int y2)
             draw_fg_line(x1 + i, y1 + y_axis + y3, x1 + i, y1 + y_axis + y4);
             draw_fg_line(x2 - 1 - i, y1 + y_axis - y3, x2 - 1 - i, y1 + y_axis - y4);
             draw_fg_line(x2 - 1 - i, y1 + y_axis + y3, x2 - 1 - i, y1 + y_axis + y4);
+        }
+
+// save the pixels for later bitmap drawing
+        if(preview_pixels)
+        {
+            preview_pixels->append(x1 + i);
+            preview_pixels->append(y1 + y_axis - y4);
+            preview_pixels->append(y1 + y_axis - y3);
+            preview_pixels->append(y1 + y_axis + y3);
+            preview_pixels->append(y1 + y_axis + y4);
+
+            preview_pixels->append(x2 - 1 - i);
+            preview_pixels->append(y1 + y_axis - y4);
+            preview_pixels->append(y1 + y_axis - y3);
+            preview_pixels->append(y1 + y_axis + y3);
+            preview_pixels->append(y1 + y_axis + y4);
         }
     }
 }
@@ -1505,17 +1629,23 @@ void MWindow::draw_cursor()
                 
                 if(current_operation == DRAW_CIRCLE)
                 {
-                    draw_oval_preview(x1 - topleft, 
-                        y1 - topleft, 
-                        x2 + topleft, 
-                        y2 + topleft);
+                    preview_pixels.remove_all();
                     if(brush_size > 1)
                     {
+// inner oval 1st
                         draw_oval_preview(x1 + bottomright, 
                             y1 + bottomright, 
                             x2 - bottomright, 
-                            y2 - bottomright);
+                            y2 - bottomright,
+                            &preview_pixels);
+                        outer_preview_offset = preview_pixels.size();
                     }
+// outer oval
+                    draw_oval_preview(x1 - topleft, 
+                        y1 - topleft, 
+                        x2 + topleft, 
+                        y2 + topleft,
+                        &preview_pixels);
                 }
                 else
                 {
@@ -1523,7 +1653,8 @@ void MWindow::draw_cursor()
                     draw_oval_preview(x1, 
                         y1, 
                         x2, 
-                        y2);
+                        y2,
+                        0);
                 }
                 break;
             }
