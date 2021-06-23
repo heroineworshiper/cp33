@@ -493,32 +493,52 @@ void MWindow::show_page_fragment(int number,
             {
                 uint8_t *src_row = page->image->get_rows()[i] + x1;
                 uint8_t *annotation_row = page->annotations->get_rows()[i] + x1;
-                uint16_t *dst_row = (uint16_t*)bitmap->get_row_pointers()[i] + x1;
+                uint16_t *dst_row = (uint16_t*)bitmap->get_row_pointers()[(i - zoom_y) * zoom_factor] + 
+                    (x1 - zoom_x) * zoom_factor;
                 for(int j = x1; j < x2; j++)
                 {
                     uint8_t src_value = *src_row++;
+                    uint16_t dst_value = 0;
                     uint8_t annotation_value = *annotation_row++;
 // foreground layer
                     if((annotation_value & 0xf0))
                     {
-                        *dst_row++ = top_rgb565[annotation_value >> 4];
+                        dst_value = top_rgb565[annotation_value >> 4];
                     }
                     else
                     if(src_value != 0x7)
                     {
 // source bit mask to RGB
-                        *dst_row++ = rgb565_table[src_value];
+                        dst_value = rgb565_table[src_value];
                     }
                     else
 // background layer
                     if((annotation_value & 0x0f))
                     {
-                        *dst_row++ = bottom_rgb565[(annotation_value & 0x0f)];
+                        dst_value = bottom_rgb565[(annotation_value & 0x0f)];
                     }
                     else
                     {
 // white
-                        *dst_row++ = 0xffff;
+                        dst_value = 0xffff;
+                    }
+                    
+                    
+                    if(zoom_factor == 1)
+                    {
+                        *dst_row++ = dst_value;
+                    }
+                    else
+                    {
+                        for(int k = 0; k < zoom_factor; k++)
+                        {
+                            uint16_t *dst_row2 = dst_row + k * root_w;
+                            for(int l = 0; l < zoom_factor; l++)
+                            {
+                                *dst_row2++ = dst_value;
+                            }
+                        }
+                        dst_row += zoom_factor;
                     }
                 }
             }
