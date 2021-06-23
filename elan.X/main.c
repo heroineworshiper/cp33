@@ -99,8 +99,10 @@
 #define DAT_TRIS TRISCbits.TRISC0
 #define DAT_PORT PORTCbits.RC0
 
-#define BUTTON_TRIS TRISBbits.TRISB6
-#define BUTTON_PORT PORTBbits.RB6
+#define LBUTTON_TRIS TRISBbits.TRISB7
+#define LBUTTON_PORT PORTBbits.RB7
+#define RBUTTON_TRIS TRISBbits.TRISB6
+#define RBUTTON_PORT PORTBbits.RB6
 
 
 
@@ -122,7 +124,8 @@ typedef struct
     uint8_t value;
     uint8_t changed;
 } button_state_t;
-button_state_t button;
+button_state_t left_button;
+button_state_t right_button;
 #define DEBOUNCE 10
 
 #define HZ 1000
@@ -1392,7 +1395,10 @@ void handle_pad()
         prev_mstat = mstat;
     }
 
-    if(mx != 0 || my != 0 || button.changed)
+    if(mx != 0 || 
+        my != 0 || 
+        left_button.changed ||
+        right_button.changed)
     {
 //         print_text("P ");
 //          print_number(mx);
@@ -1406,8 +1412,9 @@ void handle_pad()
 // report example from
 // https://eleccelerator.com/tutorial-about-usb-hid-report-descriptors/
 // buttons
-        hid_in_packet[1] = button.value;
-        button.changed = 0;
+        hid_in_packet[1] = left_button.value | (right_button.value << 1);
+        left_button.changed = 0;
+        right_button.changed = 0;
 // movement
         hid_in_packet[2] = my;
         hid_in_packet[3] = -mx;
@@ -1418,34 +1425,34 @@ void handle_pad()
 }
 
 
-void update_button()
-{
-    if(!BUTTON_PORT)
-    {
-        if(button.accum < DEBOUNCE)
-        {
-            button.accum++;
-        }
-        else
-        if(!button.value)
-        {
-            button.changed = 1;
-            button.value = 1;
-        }
-    }
-    else
-    {
-        if(button.accum > 0)
-        {
-            button.accum--;
-        }
-        else
-        if(button.value)
-        {
-            button.changed = 1;
-            button.value = 0;
-        }
-    }
+#define UPDATE_BUTTON(state, port) \
+{ \
+    if(!port) \
+    { \
+        if(state.accum < DEBOUNCE) \
+        { \
+            state.accum++; \
+        } \
+        else \
+        if(!state.value) \
+        { \
+            state.changed = 1; \
+            state.value = 1; \
+        } \
+    } \
+    else \
+    { \
+        if(state.accum > 0) \
+        { \
+            state.accum--; \
+        } \
+        else \
+        if(state.value) \
+        { \
+            state.changed = 1; \
+            state.value = 0; \
+        } \
+    } \
 }
 
 
@@ -1475,7 +1482,8 @@ int main(int argc, char** argv)
 
     touchpad_init();
 
-    BUTTON_TRIS = 1;
+    LBUTTON_TRIS = 1;
+    RBUTTON_TRIS = 1;
     INTCON2bits.RBPU = 0;
 
     init_usb();
@@ -1553,7 +1561,8 @@ void __interrupt(high_priority) isr()
             INTCONbits.TMR0IF = 0;
             TMR0 = -TIMER0_PERIOD;
             tick++;
-            update_button();
+            UPDATE_BUTTON(left_button, LBUTTON_PORT);
+            UPDATE_BUTTON(right_button, RBUTTON_PORT);
 // test clock
 //            DAT_TRIS = !DAT_TRIS;
         }

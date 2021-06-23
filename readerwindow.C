@@ -350,7 +350,7 @@ const uint8_t rgb8_table[] =
     0b11111111
 };
 
-// draw full page without annotations
+// draw full page
 void MWindow::show_page(int number, int lock_it)
 {
     show_page_fragment(number,
@@ -360,115 +360,9 @@ void MWindow::show_page(int number, int lock_it)
         root_h,
         lock_it);
     return;
-
-#if 0
-    if(number >= pages.size())
-    {
-        lock_window();
-        clear_box(0, 0, root_w, root_h, 0);
-        flash();
-        unlock_window();
-        return;
-    }
-
-
-    Page *page = pages.get(number);
-    if(lock_it)
-    {
-        lock_window();
-    }
-    BC_Bitmap *bitmap = get_temp_bitmap(root_w,
-        root_h,
-        get_color_model());
-//printf("MWindow::show_page %d color_model=%d\n", __LINE__, get_color_model());
-
-// convert to display color model
-    switch(get_color_model())
-    {
-        case BC_BGR8888:
-            for(int i = 0; i < root_h; i++)
-            {
-                uint8_t *src_row = page->image->get_rows()[i];
-                uint8_t *dst_row = bitmap->get_row_pointers()[i];
-                for(int j = 0; j < root_w; j++)
-                {
-                    uint8_t src_value = *src_row++;
-                    uint8_t r = 0;
-                    uint8_t g = 0;
-                    uint8_t b = 0;
-    // bit mask to RGB
-                    if((src_value & 0x1))
-                    {
-                        r = 0xff;
-                    }
-
-                    if((src_value & 0x2))
-                    {
-                        g = 0xff;
-                    }
-
-                    if((src_value & 0x4))
-                    {
-                        b = 0xff;
-                    }
-
-                    dst_row[0] = b;
-                    dst_row[1] = g;
-                    dst_row[2] = r;
-                    dst_row += 4;
-                }
-            }
-            break;
-
-        case BC_RGB565:
-        {
-            for(int i = 0; i < root_h; i++)
-            {
-                uint8_t *src_row = page->image->get_rows()[i];
-                uint16_t *dst_row = (uint16_t*)bitmap->get_row_pointers()[i];
-                for(int j = 0; j < root_w; j++)
-                {
-// bit mask to RGB
-                    *dst_row++ = rgb565_table[*src_row++];
-                }
-            }
-            break;
-        }
-
-        case BC_RGB8:
-        {
-            for(int i = 0; i < root_h; i++)
-            {
-                uint8_t *src_row = page->image->get_rows()[i];
-                uint8_t *dst_row = bitmap->get_row_pointers()[i];
-                for(int j = 0; j < root_w; j++)
-                {
-// bit mask to RGB
-                    *dst_row++ = rgb8_table[*src_row++];
-                }
-            }
-            break;
-        }
-
-        default:
-            printf("MWindow::show_page %d unknown color model %d\n",
-                __LINE__,
-                get_color_model());
-            break;
-    }
-
-    draw_bitmap(bitmap, 0);
-#ifdef BG_PIXMAP
-    flash();
-#endif
-    if(lock_it)
-    {
-        unlock_window();
-    }
-#endif // 0
 }
 
-// draw part of a page with annotations
+// draw part of a page
 void MWindow::show_page_fragment(int number,
     int x1,
     int y1,
@@ -485,10 +379,17 @@ void MWindow::show_page_fragment(int number,
         return;
     }
 
-    CLAMP(x1, 0, root_w);
-    CLAMP(x2, 0, root_w);
-    CLAMP(y1, 0, root_h);
-    CLAMP(y2, 0, root_h);
+    CLAMP(x1, zoom_x, zoom_x + root_w / zoom_factor);
+    CLAMP(x2, zoom_x, zoom_x + root_w / zoom_factor);
+    CLAMP(y1, zoom_y, zoom_y + root_h / zoom_factor);
+    CLAMP(y2, zoom_y, zoom_y + root_h / zoom_factor);
+
+// printf("MWindow::show_page_fragment %d %d %d %d %d\n",
+// __LINE__,
+// x1,
+// x2, 
+// y1, 
+// y2);
 
     Page *page = pages.get(number);
     if(lock_it)
@@ -498,7 +399,7 @@ void MWindow::show_page_fragment(int number,
     BC_Bitmap *bitmap = get_temp_bitmap(root_w,
         root_h,
         get_color_model());
-    
+
 // convert to display color model
     switch(get_color_model())
     {
@@ -507,7 +408,8 @@ void MWindow::show_page_fragment(int number,
             {
                 uint8_t *src_row = page->image->get_rows()[i] + x1;
                 uint8_t *annotation_row = page->annotations->get_rows()[i] + x1;
-                uint8_t *dst_row = bitmap->get_row_pointers()[i] + x1 * 4;
+                uint8_t *dst_row = bitmap->get_row_pointers()[(i - zoom_y) * zoom_factor] + 
+                    (x1 - zoom_x) * 4 * zoom_factor;
                 for(int j = x1; j < x2; j++)
                 {
                     uint8_t src_value = *src_row++;
@@ -515,7 +417,7 @@ void MWindow::show_page_fragment(int number,
                     uint8_t r = 0;
                     uint8_t g = 0;
                     uint8_t b = 0;
-                    
+
 // foreground layer
                     if((annotation_value & 0xf0))
                     {
@@ -559,10 +461,28 @@ void MWindow::show_page_fragment(int number,
                         r = g = b = 0xff;
                     }
 
-                    dst_row[0] = b;
-                    dst_row[1] = g;
-                    dst_row[2] = r;
-                    dst_row += 4;
+                    if(zoom_factor == 1)
+                    {
+                        dst_row[0] = b;
+                        dst_row[1] = g;
+                        dst_row[2] = r;
+                        dst_row += 4;
+                    }
+                    else
+                    {
+                        for(int k = 0; k < zoom_factor; k++)
+                        {
+                            uint8_t *dst_row2 = dst_row + k * root_w * 4;
+                            for(int l = 0; l < zoom_factor; l++)
+                            {
+                                dst_row2[0] = b;
+                                dst_row2[1] = g;
+                                dst_row2[2] = r;
+                                dst_row2 += 4;
+                            }
+                        }
+                        dst_row += 4 * zoom_factor;
+                    }
                 }
             }
             break;
@@ -617,20 +537,24 @@ void MWindow::show_page_fragment(int number,
     hide_cursor();
 //    draw_bitmap(bitmap, 0);
 //    flash(0);
+    int x1_zoomed = (x1 - zoom_x) * zoom_factor;
+    int y1_zoomed = (y1 - zoom_y) * zoom_factor;
+    int w_zoomed = (x2 - x1) * zoom_factor;
+    int h_zoomed = (y2 - y1) * zoom_factor;
     draw_bitmap(bitmap, 
         0,
-        x1,
-        y1,
-        x2 - x1,
-        y2 - y1,
-        x1,
-        y1,
-        x2 - y1,
-        y2 - y1,
+        x1_zoomed,
+        y1_zoomed,
+        w_zoomed,
+        h_zoomed,
+        x1_zoomed,
+        y1_zoomed,
+        w_zoomed,
+        h_zoomed,
         0);
 
 //printf("MWindow::show_page_fragment %d %d %d %d %d\n", __LINE__, x1, y1, x2, y2);
-    flash(x1, y1, x2 - x1, y2 - y1, 0);
+    flash(x1_zoomed, y1_zoomed, w_zoomed, h_zoomed, 0);
     update_cursor(cursor_x2, cursor_y2);
     flush();
     if(lock_it)
@@ -639,17 +563,46 @@ void MWindow::show_page_fragment(int number,
     }
 }
 
+void MWindow::toggle_zoom()
+{
+    if(zoom_factor == 1)
+    {
+        zoom_factor = 3;
+// what's under the cursor stays under the cursor
+        zoom_x = get_cursor_x() - root_w / 6;
+        zoom_y = get_cursor_y() - root_h / 6;
+        zoom_x -= (get_cursor_x() - root_w / 2) / zoom_factor;
+        zoom_y -= (get_cursor_y() - root_h / 2) / zoom_factor;
+        CLAMP(zoom_x, 0, root_w - root_w / 3);
+        CLAMP(zoom_y, 0, root_h - root_h / 3);
+        show_page(current_page, 0);
+    }
+    else
+    {
+        zoom_factor = 1;
+        zoom_x = 0;
+        zoom_y = 0;
+        show_page(current_page, 0);
+    }
+}
+
 // debugging only
 int MWindow::keypress_event()
 {
     switch(get_keypress())
     {
+// keyboard page turns are for testing only
         case LEFT:
             prev_page(2, 0);
             break;
 
         case RIGHT:
             next_page(2, 0);
+            break;
+
+// keyboard zoom is for testing only
+        case 'z':
+            toggle_zoom();
             break;
 
         case ESC:
@@ -662,6 +615,18 @@ int MWindow::keypress_event()
 
 int MWindow::button_press_event()
 {
+    if(get_buttonpress() == 3)
+    {
+        hide_cursor();
+        flush();
+        dragging = 1;
+        drag_x = get_cursor_x();
+        drag_y = get_cursor_y();
+        drag_zoom_x = zoom_x;
+        drag_zoom_y = zoom_y;
+        return 0;
+    }
+
 // raise the menu
     if(!MenuWindow::menu_window->get_hidden() &&
         current_operation != IDLE)
@@ -677,18 +642,18 @@ int MWindow::button_press_event()
         case DRAWING:
             update_save();
             push_undo_before();
-            segment_x = get_cursor_x();
-            segment_y = get_cursor_y();
-            draw_segment(0);
+            segment_x = get_cursor_x() / zoom_factor + zoom_x;
+            segment_y = get_cursor_y() / zoom_factor + zoom_y;
+            draw_segment(0, segment_x, segment_y);
             return 1;
             break;
         
         case ERASING:
             update_save();
             push_undo_before();
-            segment_x = get_cursor_x();
-            segment_y = get_cursor_y();
-            draw_segment(1);
+            segment_x = get_cursor_x() / zoom_factor + zoom_x;
+            segment_y = get_cursor_y() / zoom_factor + zoom_y;
+            draw_segment(1, segment_x, segment_y);
             return 1;
             break;
         
@@ -701,8 +666,8 @@ int MWindow::button_press_event()
 // start the polygon
                 hide_cursor();
                 polygon_state = POLYGON_CLICK1;
-                polygon_x1 = get_cursor_x();
-                polygon_y1 = get_cursor_y();
+                polygon_x1 = get_cursor_x() / zoom_factor + zoom_x;
+                polygon_y1 = get_cursor_y() / zoom_factor + zoom_y;
                 update_cursor(polygon_x1, polygon_y1);
             }
             return 1;
@@ -717,6 +682,32 @@ int MWindow::button_press_event()
 
 int MWindow::button_release_event()
 {
+    if(dragging)
+    {
+        if(get_cursor_x() == drag_x &&
+            get_cursor_y() == drag_y)
+        {
+// zoom toggle
+            toggle_zoom();
+        }
+        else
+        if(current_operation != IDLE)
+        {
+            update_cursor(get_cursor_x() / zoom_factor + zoom_x, 
+                get_cursor_y() / zoom_factor + zoom_y);
+        }
+
+// raise the menu
+        if(!MenuWindow::menu_window->get_hidden())
+        {
+            MenuWindow::menu_window->lock_window();
+            MenuWindow::menu_window->raise_window(1);
+            MenuWindow::menu_window->unlock_window();
+        }
+        dragging = 0;
+        return 1;
+    }
+
     switch(current_operation)
     {
         case DRAWING:
@@ -749,7 +740,9 @@ int MWindow::button_release_event()
                 {
                     segment_x = polygon_x1;
                     segment_y = polygon_y1;
-                    draw_segment(0);
+                    draw_segment(0, 
+                        get_cursor_x() / zoom_factor + zoom_x, 
+                        get_cursor_y() / zoom_factor + zoom_y);
                 }
                 else
                 if(current_operation == DRAW_BOX)
@@ -763,7 +756,8 @@ int MWindow::button_release_event()
                 
                 polygon_state = POLYGON_IDLE;
                 push_undo_after();
-                update_cursor(get_cursor_x(), get_cursor_y());
+                update_cursor(get_cursor_x() / zoom_factor + zoom_x, 
+                    get_cursor_y() / zoom_factor + zoom_y);
                 flush();
             }
             return 1;
@@ -839,10 +833,29 @@ int MWindow::button_release_event()
 int MWindow::cursor_motion_event()
 {
     int need_cursor = 0;
-    if(!cursor_entered)
+    if(get_buttonpress() != 3 && !cursor_entered)
     {
 // motion event happened after cursor left
         return 0;
+    }
+
+    if(dragging)
+    {
+        if(zoom_factor > 1)
+        {
+            int new_zoom_x = drag_zoom_x + (get_cursor_x() - drag_x) / zoom_factor;
+            int new_zoom_y = drag_zoom_y + (get_cursor_y() - drag_y) / zoom_factor;
+            CLAMP(new_zoom_x, 0, root_w - root_w / 3);
+            CLAMP(new_zoom_y, 0, root_h - root_h / 3);
+            if(new_zoom_x != zoom_x ||
+                new_zoom_y != zoom_y)
+            {
+                zoom_x = new_zoom_x;
+                zoom_y = new_zoom_y;
+                show_page(current_page, 0);
+            }
+        }
+        return 1;
     }
 
     switch(current_operation)
@@ -851,7 +864,9 @@ int MWindow::cursor_motion_event()
 //printf("MWindow::cursor_motion_event %d\n", __LINE__);
             if(get_button_down())
             {
-                draw_segment(0);
+                draw_segment(0, 
+                    get_cursor_x() / zoom_factor + zoom_x, 
+                    get_cursor_y() / zoom_factor + zoom_y);
             }
             need_cursor = 1;
             flush();
@@ -861,7 +876,9 @@ int MWindow::cursor_motion_event()
 //printf("MWindow::cursor_motion_event %d\n", __LINE__);
             if(get_button_down())
             {
-                draw_segment(1);
+                draw_segment(1, 
+                    get_cursor_x() / zoom_factor + zoom_x, 
+                    get_cursor_y() / zoom_factor + zoom_y);
             }
             need_cursor = 1;
             break;
@@ -878,7 +895,8 @@ int MWindow::cursor_motion_event()
     if(need_cursor)
     {
 //printf("MWindow::cursor_motion_event %d %d\n", __LINE__, is_event_win());
-        update_cursor(get_cursor_x(), get_cursor_y());
+        update_cursor(get_cursor_x() / zoom_factor + zoom_x, 
+            get_cursor_y() / zoom_factor + zoom_y);
         flush();
 // the raspberry pi accumulates drawing commands after the flush, so we need
 // to wait for it to finish
@@ -903,7 +921,8 @@ int MWindow::cursor_enter_event()
         current_operation != IDLE)
     {
 //printf("MWindow::cursor_enter_event %d\n", __LINE__);
-        update_cursor(get_cursor_x(), get_cursor_y());
+        update_cursor(get_cursor_x() / zoom_factor + zoom_x,
+            get_cursor_y() / zoom_factor + zoom_y);
         flush();
         cursor_entered = 1;
         return 1;
@@ -944,7 +963,7 @@ void MWindow::draw_brush(VFrame *dst,
     }
 }
 
-void MWindow::draw_segment(int erase)
+void MWindow::draw_segment(int erase, int x, int y)
 {
     if(current_page >= pages.size())
     {
@@ -965,9 +984,9 @@ void MWindow::draw_segment(int erase)
     VFrame *annotations = page->annotations;
     int is_erase = (current_operation == ERASING);
     int x1 = segment_x;
-    int x2 = get_cursor_x();
+    int x2 = x;
     int y1 = segment_y;
-    int y2 = get_cursor_y();
+    int y2 = y;
 	int x_diff = labs(x2 - x1);
 	int y_diff = labs(y2 - y1);
     uint8_t erase_mask;
@@ -1056,10 +1075,11 @@ void MWindow::draw_segment(int erase)
         0);
 //printf("MWindow::draw_segment %d\n", __LINE__);
 
-    segment_x = get_cursor_x();
-    segment_y = get_cursor_y();
+    segment_x = x;
+    segment_y = y;
 }
 
+// draw a pixel on the bitmap
 void MWindow::draw_pixel(uint8_t **rows, 
     int x, 
     int y, 
@@ -1135,10 +1155,10 @@ void MWindow::finish_box()
     uint8_t draw_mask;
     compute_masks(&erase_mask, &draw_mask);
     
-    int x1 = MIN(polygon_x1, get_cursor_x());
-    int y1 = MIN(polygon_y1, get_cursor_y());
-    int x2 = MAX(polygon_x1, get_cursor_x());
-    int y2 = MAX(polygon_y1, get_cursor_y());
+    int x1 = MIN(polygon_x1, get_cursor_x() / zoom_factor + zoom_x);
+    int y1 = MIN(polygon_y1, get_cursor_y() / zoom_factor + zoom_y);
+    int x2 = MAX(polygon_x1, get_cursor_x() / zoom_factor + zoom_x);
+    int y2 = MAX(polygon_y1, get_cursor_y() / zoom_factor + zoom_y);
     CLAMP(x1, 0, root_w);
     CLAMP(x2, 0, root_w);
     CLAMP(y1, 0, root_h);
@@ -1180,10 +1200,10 @@ void MWindow::finish_oval()
 
     compute_masks(&erase_mask, &draw_mask);
     
-    int x1 = MIN(polygon_x1, get_cursor_x());
-    int y1 = MIN(polygon_y1, get_cursor_y());
-    int x2 = MAX(polygon_x1, get_cursor_x());
-    int y2 = MAX(polygon_y1, get_cursor_y());
+    int x1 = MIN(polygon_x1, get_cursor_x() / zoom_factor + zoom_x);
+    int y1 = MIN(polygon_y1, get_cursor_y() / zoom_factor + zoom_y);
+    int x2 = MAX(polygon_x1, get_cursor_x() / zoom_factor + zoom_x);
+    int y2 = MAX(polygon_y1, get_cursor_y() / zoom_factor + zoom_y);
     int brush_size = this->draw_size;
 
     int x_axis = (x2 - x1) / 2;
@@ -1441,18 +1461,18 @@ void MWindow::draw_oval_preview(int x1,
         if(y4 <= y3 + 1)
         {
             y4 = y3;
-            draw_fg_pixel(x1 + i, y1 + y_axis - y3);
-            draw_fg_pixel(x1 + i, y1 + y_axis + y3);
-            draw_fg_pixel(x2 - 1 - i, y1 + y_axis - y3);
-            draw_fg_pixel(x2 - 1 - i, y1 + y_axis + y3);
+            draw_pixel_preview(x1 + i, y1 + y_axis - y3);
+            draw_pixel_preview(x1 + i, y1 + y_axis + y3);
+            draw_pixel_preview(x2 - 1 - i, y1 + y_axis - y3);
+            draw_pixel_preview(x2 - 1 - i, y1 + y_axis + y3);
         }
         else
         {
             y4--;
-            draw_fg_line(x1 + i, y1 + y_axis - y3, x1 + i, y1 + y_axis - y4);
-            draw_fg_line(x1 + i, y1 + y_axis + y3, x1 + i, y1 + y_axis + y4);
-            draw_fg_line(x2 - 1 - i, y1 + y_axis - y3, x2 - 1 - i, y1 + y_axis - y4);
-            draw_fg_line(x2 - 1 - i, y1 + y_axis + y3, x2 - 1 - i, y1 + y_axis + y4);
+            draw_line_preview(x1 + i, y1 + y_axis - y3, x1 + i, y1 + y_axis - y4);
+            draw_line_preview(x1 + i, y1 + y_axis + y3, x1 + i, y1 + y_axis + y4);
+            draw_line_preview(x2 - 1 - i, y1 + y_axis - y3, x2 - 1 - i, y1 + y_axis - y4);
+            draw_line_preview(x2 - 1 - i, y1 + y_axis + y3, x2 - 1 - i, y1 + y_axis + y4);
         }
 
 // save the pixels for later bitmap drawing
@@ -1470,6 +1490,77 @@ void MWindow::draw_oval_preview(int x1,
             preview_pixels->append(y1 + y_axis + y3);
             preview_pixels->append(y1 + y_axis + y4);
         }
+    }
+}
+
+
+void MWindow::draw_pixel_preview(int x, int y)
+{
+    draw_fg_box((x - zoom_x) * zoom_factor, 
+        (y - zoom_y) * zoom_factor, 
+        zoom_factor, 
+        zoom_factor);
+}
+
+
+// draw FG line with zooming
+void MWindow::draw_line_preview(int x1, int y1, int x2, int y2)
+{
+    if(zoom_factor == 1)
+    {
+        draw_fg_line(x1, 
+            y1, 
+            x2, 
+            y2);
+        return;
+    }
+
+	int x_diff = labs(x2 - x1);
+	int y_diff = labs(y2 - y1);
+    if(!x_diff && !y_diff)
+    {
+        draw_pixel_preview(x1, y1);
+    }
+    else
+    if(x_diff > y_diff)
+    {
+        if(x2 < x1)
+        {
+            int temp = x1;
+            x1 = x2;
+            x2 = temp;
+            temp = y1;
+            y1 = y2;
+            y2 = temp;
+        }
+
+		int n = y2 - y1;
+		int d = x2 - x1;
+		for(int i = x1; i <= x2; i++)
+		{
+			int y = y1 + (int64_t)(i - x1) * (int64_t)n / (int64_t)d;
+            draw_pixel_preview(i, y);
+		}
+    }
+    else
+    {
+        if(y2 < y1)
+        {
+            int temp = y1;
+            y1 = y2;
+            y2 = temp;
+            temp = x1;
+            x1 = x2;
+            x2 = temp;
+        }
+
+		int n = x2 - x1;
+		int d = y2 - y1;
+		for(int i = y1; i <= y2; i++)
+		{
+			int x = x1 + (int64_t)(i - y1) * (int64_t)n / (int64_t)d;
+			draw_pixel_preview(x, i);
+		}
     }
 }
 
@@ -1519,7 +1610,7 @@ void MWindow::draw_cursor()
             {
                 if(brush_size == 1)
                 {
-                    draw_fg_line(polygon_x1, 
+                    draw_line_preview(polygon_x1, 
                         polygon_y1, 
                         cursor_x, 
                         cursor_y);
@@ -1542,54 +1633,54 @@ void MWindow::draw_cursor()
 
                     if(y2 > y1)
                     {
-                        draw_fg_line(x1 - topleft, 
+                        draw_line_preview(x1 - topleft, 
                             y1 - topleft, 
                             x1 + bottomright, 
                             y1 - topleft);
-                        draw_fg_line(x1 - topleft, 
-                            y1 - topleft, 
+                        draw_line_preview(x1 - topleft, 
+                            y1 - topleft + 1, 
                             x1 - topleft, 
                             y1 + bottomright);
-                        draw_fg_line(x2 + bottomright, 
-                            y2 + bottomright, 
+                        draw_line_preview(x2 + bottomright, 
+                            y2 + bottomright - 1, 
                             x2 + bottomright, 
                             y2 - topleft);
-                        draw_fg_line(x2 + bottomright, 
+                        draw_line_preview(x2 + bottomright, 
                             y2 + bottomright, 
                             x2 - topleft, 
                             y2 + bottomright);
-                        draw_fg_line(x1 + bottomright, 
+                        draw_line_preview(x1 + bottomright, 
                             y1 - topleft,
                             x2 + bottomright, 
                             y2 - topleft);
-                        draw_fg_line(x1 - topleft, 
+                        draw_line_preview(x1 - topleft, 
                             y1 + bottomright,
                             x2 - topleft, 
                             y2 + bottomright);
                     }
                     else
                     {
-                        draw_fg_line(x1 - topleft, 
+                        draw_line_preview(x1 - topleft, 
                             y1 + bottomright, 
                             x1 + bottomright, 
                             y1 + bottomright);
-                        draw_fg_line(x1 - topleft, 
-                            y1 + bottomright, 
+                        draw_line_preview(x1 - topleft, 
+                            y1 + bottomright - 1, 
                             x1 - topleft, 
                             y1 - topleft);
-                        draw_fg_line(x2 + bottomright, 
+                        draw_line_preview(x2 + bottomright, 
                             y2 - topleft, 
                             x2 - topleft, 
                             y2 - topleft);
-                        draw_fg_line(x2 + bottomright, 
-                            y2 - topleft, 
+                        draw_line_preview(x2 + bottomright, 
+                            y2 - topleft + 1, 
                             x2 + bottomright, 
                             y2 + bottomright);
-                        draw_fg_line(x1 - topleft, 
+                        draw_line_preview(x1 - topleft, 
                             y1 - topleft,
                             x2 - topleft, 
                             y2 - topleft);
-                        draw_fg_line(x1 + bottomright, 
+                        draw_line_preview(x1 + bottomright, 
                             y1 + bottomright,
                             x2 + bottomright, 
                             y2 + bottomright);
@@ -1601,19 +1692,19 @@ void MWindow::draw_cursor()
             
             case DRAW_RECT:
             case DRAW_BOX:
-                draw_fg_line(polygon_x1, 
+                draw_line_preview(polygon_x1, 
                     polygon_y1, 
                     cursor_x, 
                     polygon_y1);
-                draw_fg_line(cursor_x, 
+                draw_line_preview(cursor_x, 
                     polygon_y1, 
                     cursor_x, 
                     cursor_y);
-                draw_fg_line(cursor_x, 
+                draw_line_preview(cursor_x, 
                     cursor_y, 
                     polygon_x1, 
                     cursor_y);
-                draw_fg_line(polygon_x1, 
+                draw_line_preview(polygon_x1, 
                     cursor_y, 
                     polygon_x1, 
                     polygon_y1);
@@ -1665,50 +1756,61 @@ void MWindow::draw_cursor()
 // draw the brush
         if(brush_size == 1)
         {
-            draw_fg_pixel(cursor_x, cursor_y);
+// single pixel
+            draw_pixel_preview(cursor_x, cursor_y);
         }
         else
         {
-            for(int i = 0; i < brush_size; i++)
+// top side
+            draw_line_preview(cursor_x - topleft,
+                cursor_y - topleft,
+                cursor_x + bottomright,
+                cursor_y - topleft);
+// bottom side
+            draw_line_preview(cursor_x - topleft,
+                cursor_y + bottomright,
+                cursor_x + bottomright,
+                cursor_y + bottomright);
+// left side
+            if(brush_size > 2)
             {
-    // top side
-                draw_fg_pixel(cursor_x - topleft + i, 
-                    cursor_y - topleft);
-    // bottom side
-                draw_fg_pixel(cursor_x - topleft + i, 
-                    cursor_y + bottomright);
-            }
-
-            for(int i = 1; i < brush_size - 1; i++)
-            {
-    // left side
-                draw_fg_pixel(cursor_x - topleft, 
-                    cursor_y - topleft + i);
-    // right side
-                draw_fg_pixel(cursor_x + bottomright, 
-                    cursor_y - topleft + i);
+                draw_line_preview(cursor_x - topleft,
+                    cursor_y - topleft + 1,
+                    cursor_x - topleft,
+                    cursor_y + bottomright - 1);
+// right side
+                draw_line_preview(cursor_x + bottomright,
+                    cursor_y - topleft + 1,
+                    cursor_x + bottomright,
+                    cursor_y + bottomright - 1);
             }
         }
     }
 
 // the crosshair
-    set_line_dashes(1);
-    draw_fg_line(0, 
-        cursor_y, 
-        cursor_x - brush_size / 2 - margin, 
-        cursor_y);
-    draw_fg_line(cursor_x + brush_size / 2 + margin, 
-        cursor_y, 
-        get_w(), 
-        cursor_y);
-    draw_fg_line(cursor_x,
-        0,
-        cursor_x,
-        cursor_y - brush_size / 2 - margin);
-    draw_fg_line(cursor_x,
-        cursor_y + brush_size / 2 + margin,
-        cursor_x,
-        get_h());
+    if(polygon_state == POLYGON_IDLE)
+    {
+        if(zoom_factor == 1)
+        {
+            set_line_dashes(1);
+        }
+        draw_line_preview(zoom_x, 
+            cursor_y, 
+            cursor_x - brush_size / 2 - margin, 
+            cursor_y);
+        draw_line_preview(cursor_x + brush_size / 2 + margin, 
+            cursor_y, 
+            zoom_x + get_w() / zoom_factor, 
+            cursor_y);
+        draw_line_preview(cursor_x,
+            zoom_y,
+            cursor_x,
+            cursor_y - brush_size / 2 - margin);
+        draw_line_preview(cursor_x,
+            cursor_y + brush_size / 2 + margin,
+            cursor_x,
+            zoom_y + get_h() / zoom_factor);
+    }
     set_opaque();
     set_line_dashes(0);
 }

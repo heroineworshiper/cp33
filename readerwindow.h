@@ -49,6 +49,7 @@ public:
     int cursor_enter_event();
     void load_defaults();
     void save_defaults();
+    void toggle_zoom();
     void show_error(char *text);
     void draw_cursor();
     void update_cursor(int x, int y);
@@ -56,7 +57,7 @@ public:
     void enter_drawing(int current_operation);
     void exit_drawing();
 // draw a line with the brush
-    void draw_segment(int erase);
+    void draw_segment(int erase, int cursor_x, int cursor_y);
 // draw a single brush position
     void draw_brush(VFrame *dst, 
         int x, 
@@ -70,6 +71,8 @@ public:
         int x2, 
         int y2, 
         ArrayList<int> *preview_pixels);
+    void draw_line_preview(int x1, int y1, int x2, int y2);
+    void draw_pixel_preview(int x, int y);
     void finish_box();
     void finish_oval();
     void draw_pixel(uint8_t **rows, 
@@ -148,7 +151,14 @@ public:
     int zoom_y;
 // 1 -> 1:1
 // 3 -> 3:1
+// need a multiple of 3 so RGB can each be a pixel
     int zoom_factor;
+// start of drag
+    int drag_x;
+    int drag_y;
+    int drag_zoom_x;
+    int drag_zoom_y;
+    int dragging;
 };
 
 
