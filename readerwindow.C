@@ -637,13 +637,15 @@ int MWindow::button_press_event()
 {
     if(get_buttonpress() == 3)
     {
-        hide_cursor();
-        flush();
+//        hide_cursor();
+//        flush();
         dragging = 1;
         drag_x = get_cursor_x();
         drag_y = get_cursor_y();
         drag_zoom_x = zoom_x;
         drag_zoom_y = zoom_y;
+        drag_accum_x = 0;
+        drag_accum_y = 0;
         return 0;
     }
 
@@ -704,8 +706,8 @@ int MWindow::button_release_event()
 {
     if(dragging)
     {
-        if(get_cursor_x() == drag_x &&
-            get_cursor_y() == drag_y)
+        if(drag_accum_x == 0 &&
+            drag_accum_y == 0)
         {
 // zoom toggle
             toggle_zoom();
@@ -715,6 +717,7 @@ int MWindow::button_release_event()
         {
             update_cursor(get_cursor_x() / zoom_factor + zoom_x, 
                 get_cursor_y() / zoom_factor + zoom_y);
+            flush();
         }
 
 // raise the menu
@@ -853,7 +856,7 @@ int MWindow::button_release_event()
 int MWindow::cursor_motion_event()
 {
     int need_cursor = 0;
-    if(get_buttonpress() != 3 && !cursor_entered)
+    if(!dragging && !cursor_entered)
     {
 // motion event happened after cursor left
         return 0;
@@ -863,8 +866,15 @@ int MWindow::cursor_motion_event()
     {
         if(zoom_factor > 1)
         {
-            int new_zoom_x = drag_zoom_x + (get_cursor_x() - drag_x) / zoom_factor;
-            int new_zoom_y = drag_zoom_y + (get_cursor_y() - drag_y) / zoom_factor;
+            int xdiff = get_cursor_x() - drag_x;
+            int ydiff = get_cursor_y() - drag_y;
+//printf("MWindow::cursor_motion_event %d %d %d\n", __LINE__, xdiff, ydiff);
+            drag_accum_x += xdiff;
+            drag_accum_y += ydiff;
+            reposition_cursor(drag_x, drag_y);
+
+            int new_zoom_x = drag_zoom_x + drag_accum_x;
+            int new_zoom_y = drag_zoom_y + drag_accum_y;
             CLAMP(new_zoom_x, 0, root_w - root_w / 3);
             CLAMP(new_zoom_y, 0, root_h - root_h / 3);
             if(new_zoom_x != zoom_x ||
@@ -875,14 +885,14 @@ int MWindow::cursor_motion_event()
                 show_page(current_page, 0);
             }
         }
-        return 1;
+//        return 1;
     }
 
     switch(current_operation)
     {
         case DRAWING:
 //printf("MWindow::cursor_motion_event %d\n", __LINE__);
-            if(get_button_down())
+            if(get_button_down() && get_buttonpress() == 1)
             {
                 draw_segment(0, 
                     get_cursor_x() / zoom_factor + zoom_x, 
@@ -894,7 +904,7 @@ int MWindow::cursor_motion_event()
         
         case ERASING:
 //printf("MWindow::cursor_motion_event %d\n", __LINE__);
-            if(get_button_down())
+            if(get_button_down() && get_buttonpress() == 1)
             {
                 draw_segment(1, 
                     get_cursor_x() / zoom_factor + zoom_x, 

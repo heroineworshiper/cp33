@@ -153,11 +153,16 @@ public:
 // 3 -> 3:1
 // need a multiple of 3 so RGB can each be a pixel
     int zoom_factor;
+
+
 // start of drag
     int drag_x;
     int drag_y;
     int drag_zoom_x;
     int drag_zoom_y;
+// accumulated drag motion
+    int drag_accum_x;
+    int drag_accum_y;
     int dragging;
 };
 

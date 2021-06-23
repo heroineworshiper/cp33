@@ -732,6 +732,13 @@ void load_file_entry(char *path)
         save_annotations();
     }
 
+    MenuWindow::menu_window->lock_window();
+    MenuWindow::menu_window->start_hourglass();
+    MenuWindow::menu_window->unlock_window();
+    MWindow::mwindow->lock_window();
+    MWindow::mwindow->start_hourglass();
+    MWindow::mwindow->unlock_window();
+
 #ifdef TWO_PAGE
     send_command(LOAD_FILE, 
         (uint8_t*)path, 
@@ -742,8 +749,14 @@ void load_file_entry(char *path)
     ::load_file(path);
 #endif
 
+    MenuWindow::menu_window->lock_window();
     MenuWindow::menu_window->save->set_images(MWindow::mwindow->theme->get_image_set("save"));
     MenuWindow::menu_window->save->draw_face(1);
+    MenuWindow::menu_window->stop_hourglass();
+    MenuWindow::menu_window->unlock_window();
+    MWindow::mwindow->lock_window();
+    MWindow::mwindow->stop_hourglass();
+    MWindow::mwindow->unlock_window();
 
 }
 

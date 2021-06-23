@@ -275,12 +275,14 @@ Save::Save(int x, int y)
 
 int Save::handle_event()
 {
+    start_hourglass();
     if(!save_annotations_entry())
     {
         set_images(MWindow::mwindow->theme->get_image_set("save"));
         draw_face(1);
         file_changed = 0;
     }
+    stop_hourglass();
     return 1;
 }
 

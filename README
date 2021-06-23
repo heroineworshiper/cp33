@@ -140,8 +140,6 @@ Run it on the server 2nd:
 xinit /usr/bin/fvwm2&
 export DISPLAY=:0
 xinput
-xinput --list-props "PixArt USB Optical Mouse"
-xinput --set-prop "PixArt USB Optical Mouse" "libinput Accel Speed" -1
 xinput --list-props "McLionhead Trackpad"
 xinput --set-prop "McLionhead Trackpad" "libinput Accel Speed" 0
 nohup ./reader >& /dev/null
