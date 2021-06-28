@@ -21,6 +21,11 @@
 
 
 
+
+
+
+#ifdef _18F2450
+
 // PIC18F2450 Configuration Bit Settings
 
 // 'C' source line config statements
@@ -77,6 +82,72 @@
 
 // CONFIG7H
 #pragma config EBTRB = OFF      // Boot Block Table Read Protection bit (Boot block (000000-0007FFh) or (000000-000FFFh) is not protected from table reads executed in other blocks)
+#endif // _18F2450
+
+
+
+#ifdef _18F14K50
+
+// CONFIG1L
+#pragma config CPUDIV = NOCLKDIV// CPU System Clock Selection bits (No CPU System Clock divide)
+#pragma config USBDIV = OFF     // USB Clock Selection bit (USB clock comes directly from the OSC1/OSC2 oscillator block; no divide)
+
+// CONFIG1H
+#pragma config FOSC = XT        // Oscillator Selection bits 
+#pragma config PLLEN = ON       // 4 X PLL Enable bit (Oscillator multiplied by 4)
+#pragma config PCLKEN = ON      // Primary Clock Enable bit (Primary clock enabled)
+#pragma config FCMEN = OFF      // Fail-Safe Clock Monitor Enable (Fail-Safe Clock Monitor disabled)
+#pragma config IESO = OFF       // Internal/External Oscillator Switchover bit (Oscillator Switchover mode disabled)
+
+// CONFIG2L
+#pragma config PWRTEN = OFF     // Power-up Timer Enable bit (PWRT disabled)
+#pragma config BOREN = SBORDIS  // Brown-out Reset Enable bits (Brown-out Reset enabled in hardware only (SBOREN is disabled))
+#pragma config BORV = 19        // Brown-out Reset Voltage bits (VBOR set to 3.0 V nominal)
+
+// CONFIG2H
+#pragma config WDTEN = ON       // Watchdog Timer Enable bit (WDT is always enabled. SWDTEN bit has no effect.)
+#pragma config WDTPS = 32768    // Watchdog Timer Postscale Select bits (1:32768)
+
+// CONFIG3H
+#pragma config HFOFST = ON      // HFINTOSC Fast Start-up bit (HFINTOSC starts clocking the CPU without waiting for the oscillator to stablize.)
+#pragma config MCLRE = ON       // MCLR Pin Enable bit (MCLR pin enabled; RA3 input pin disabled)
+
+// CONFIG4L
+#pragma config STVREN = OFF     // Stack Full/Underflow Reset Enable bit (Stack full/underflow will not cause Reset)
+#pragma config LVP = OFF        // Single-Supply ICSP Enable bit (Single-Supply ICSP disabled)
+#pragma config BBSIZ = OFF      // Boot Block Size Select bit (1kW boot block size)
+#pragma config XINST = OFF      // Extended Instruction Set Enable bit (Instruction set extension and Indexed Addressing mode disabled (Legacy mode))
+
+// CONFIG5L
+#pragma config CP0 = OFF        // Code Protection bit (Block 0 not code-protected)
+#pragma config CP1 = OFF        // Code Protection bit (Block 1 not code-protected)
+
+// CONFIG5H
+#pragma config CPB = OFF        // Boot Block Code Protection bit (Boot block not code-protected)
+#pragma config CPD = OFF        // Data EEPROM Code Protection bit (Data EEPROM not code-protected)
+
+// CONFIG6L
+#pragma config WRT0 = OFF       // Table Write Protection bit (Block 0 not write-protected)
+#pragma config WRT1 = OFF       // Table Write Protection bit (Block 1 not write-protected)
+
+// CONFIG6H
+#pragma config WRTC = OFF       // Configuration Register Write Protection bit (Configuration registers not write-protected)
+#pragma config WRTB = OFF       // Boot Block Write Protection bit (Boot block not write-protected)
+#pragma config WRTD = OFF       // Data EEPROM Write Protection bit (Data EEPROM not write-protected)
+
+// CONFIG7L
+#pragma config EBTR0 = OFF      // Table Read Protection bit (Block 0 not protected from table reads executed in other blocks)
+#pragma config EBTR1 = OFF      // Table Read Protection bit (Block 1 not protected from table reads executed in other blocks)
+
+// CONFIG7H
+#pragma config EBTRB = OFF      // Boot Block Table Read Protection bit (Boot block not protected from table reads executed in other blocks)
+#endif // _18F14K50
+
+
+
+
+
+
 
 // #pragma config statements should precede project file includes.
 // Use project enums instead of #define for ON and OFF.
@@ -85,11 +156,19 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#ifdef _18F2450
 #include <pic18f2450.h>
+#endif
+
+#ifdef _18F14K50
+#include <pic18f14k50.h>
+#endif
 
 #define CLOCKSPEED 48000000
 
 
+#ifdef _18F2450
 // PS2 touchpad pins
 #define CLK_LAT  LATCbits.LATC1
 #define CLK_TRIS TRISCbits.TRISC1
@@ -103,6 +182,31 @@
 #define LBUTTON_PORT PORTBbits.RB7
 #define RBUTTON_TRIS TRISBbits.TRISB6
 #define RBUTTON_PORT PORTBbits.RB6
+#endif // _18F2450
+
+
+
+
+#ifdef _18F14K50
+// PS2 touchpad pins
+#define CLK_LAT  LATCbits.LATC0
+#define CLK_TRIS TRISCbits.TRISC0
+#define CLK_PORT PORTCbits.RC0
+
+#define DAT_LAT LATCbits.LATC1
+#define DAT_TRIS TRISCbits.TRISC1
+#define DAT_PORT PORTCbits.RC1
+
+#define LBUTTON_TRIS TRISCbits.TRISC6
+#define LBUTTON_PORT PORTCbits.RC6
+#define RBUTTON_TRIS TRISCbits.TRISC7
+#define RBUTTON_PORT PORTCbits.RC7
+
+#define BUTTON_PULLUP_LAT LATCbits.LATC5
+#define BUTTON_PULLUP_TRIS TRISCbits.TRISC5
+#endif // _18F2450
+
+
 
 
 
@@ -460,9 +564,14 @@ const uint8_t *data_ptr;
 
 // must use dual port RAM for endpoint memory
 // 18F2450
+#ifdef _18F2450
 #define USB_BANK 0x400
+#endif
+
 // 18F14K50
-//#define USB_BANK 0x200
+#ifdef _18F14K50
+#define USB_BANK 0x200
+#endif
 
 volatile uint8_t *EP0_OUT = (uint8_t *)(USB_BANK);
 volatile uint8_t *EP0_IN = (uint8_t *)(USB_BANK + 4);
@@ -1461,7 +1570,17 @@ void handle_pad()
 int main(int argc, char** argv) 
 {
 // digital mode
+#ifdef _18F2450
     ADCON1 = 0b00001111;
+#endif
+#ifdef _18F14K50
+    ANSEL = 0b00000000;
+    ANSELH = 0b00000000;
+    BUTTON_PULLUP_LAT = 1;
+    BUTTON_PULLUP_TRIS = 0;
+#endif
+
+
     flags.value = 0;
     init_uart();
 
@@ -1473,6 +1592,8 @@ int main(int argc, char** argv)
     DAT_LAT = 0;
     CLK_TRIS = 1;
     DAT_TRIS = 1;
+
+
 // mane timer
 // 1:32 prescaler for 48Mhz clock
     T0CON = 0b10000100;
@@ -1484,7 +1605,10 @@ int main(int argc, char** argv)
 
     LBUTTON_TRIS = 1;
     RBUTTON_TRIS = 1;
+#ifdef _18F2450
     INTCON2bits.RBPU = 0;
+#endif
+
 
     init_usb();
 

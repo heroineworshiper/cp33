@@ -27,10 +27,10 @@
 
 // step 2: run this program as a controller
 // export DISPLAY=:0
-// ./reader scherzo4
+// ./reader
 
 // run this program as a client
-// ./reader
+// ./reader -c
 
 // compile it on a raspberry:
 // apt install xorg

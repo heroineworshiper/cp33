@@ -694,7 +694,7 @@ void MenuWindow::create_objects()
     add_tool(top = new Top(x, y));
     add_tool(bottom = new Bottom(x, y));
 
-    x += top->get_w() + margin;
+    x += top->get_w();
     add_tool(top_color = new TopColor(x, y));
     add_tool(bottom_color = new BottomColor(x, y));
 
