@@ -134,15 +134,16 @@ client needs to mount it over NFS.
 Run it on the client 1st:
 Xorg&
 export DISPLAY=:0
-nohup ./reader -c >& /dev/null
+nohup ./reader -c >& /dev/null&
 
 Run it on the server 2nd:
+mount /reader
 xinit /usr/bin/fvwm2&
 export DISPLAY=:0
 xinput
 xinput --list-props "McLionhead Trackpad"
 xinput --set-prop "McLionhead Trackpad" "libinput Accel Speed" 0
-nohup ./reader >& /dev/null
+nohup ./reader >& /dev/null&
 
 
 

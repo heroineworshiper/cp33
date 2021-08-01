@@ -1,1 +1,4 @@
 *.pcb-
+/elan.X/nbproject/private/
+/elan.X/dist/default/
+/elan.X/build/default/

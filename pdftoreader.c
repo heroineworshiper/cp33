@@ -38,7 +38,8 @@
 #define DISPLAY_H 1366
 #define TEXTLEN 1024
 #define DPI 300
-
+// greyscale value for white
+#define THRESHOLD 0x80
 
 int page1;
 int page2;
@@ -174,7 +175,7 @@ void process_frame(uint8_t *src, int src_w, int src_h)
                     }
                 }
 
-                if(value > 0x80)
+                if(value > THRESHOLD)
                 {
                     dst_row[col] |= component;
                 }
@@ -210,6 +211,7 @@ int main(int argc, char *argv[])
         char *progname = argv[0];
         printf("Usage: %s <source files> <1st page> <last page inclusive> <crop x,y> <crop w,h> <dest file>\n", 
             progname);
+        printf("The cropping coordinates are DPI %d\n", DPI);
         printf("Example: %s /home/archive/scherzo4b.pdf 1 99 135,0 2294,3567 scherzo4.reader\n", progname);
         printf("Example: %s /home/archive/rbg*.png 1 99 231,0 2982x4400 rbg.reader\n", progname);
         printf("Example: %s /home/archive/separate*.png 1 99 0,0 9999x9999 separate.reader\n", progname);
@@ -261,6 +263,25 @@ int main(int argc, char *argv[])
             "gs -dBATCH -dNOPAUSE -sDEVICE=pnm -o - -r%d %s", 
             DPI, 
             sources[0]);
+
+// escape the special characters
+        char *ptr = string;
+        while(*ptr)
+        {
+            if(*ptr == '(' ||
+                *ptr == ')')
+            {
+                int len = strlen(string);
+                for(i = len + 1; i > ptr - string; i--)
+                {
+                    string[i] = string[i - 1];
+                }
+                *ptr = '\\';
+                ptr++;
+            }
+            ptr++;
+        }
+
         printf("Running %s\n", string);
         FILE *fd = popen(string, "r");
         if(!fd)

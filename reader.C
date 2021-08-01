@@ -22,8 +22,12 @@
 // show music on 2 LCD panels
 
 // step 1: import the text using the pdftoreader program
-// ./pdftoreader /home/archive/scherzo4b.pdf 1 99 135,0 2292,3567 scherzo4
-// ./pdftoreader /home/archive/Chopin_Scherzo_No.1\,_Op.20_Joseffy.pdf 1 99 135,0 2292,4000 scherzo1
+// ./pdftoreader /home/archive/scherzo4b.pdf 1 99 135,0 2292,3567 scherzo4.reader
+// ./pdftoreader /home/archive/Chopin_Scherzo_No.1\,_Op.20_Joseffy.pdf 1 99 135,0 2292,4000 scherzo1.reader
+// ./pdftoreader /home/archive/Chopin_-_Impromptu_no_3_\(Paderewski\).pdf 1 99 69,78 2382,3273 impromptu3.reader
+
+// compress the reader files with the lowest setting
+// gzip impromptu3.reader
 
 // step 2: run this program as a controller
 // export DISPLAY=:0

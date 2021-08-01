@@ -58,6 +58,7 @@
 
 
 #define CHANNELS 2
+#define SAMPLERATE 44100
 #define BITS_PER_SAMPLE 24
 #define SAMPLESIZE (CHANNELS * BITS_PER_SAMPLE / 8)
 #define PAGE_SIZE 4096
@@ -67,7 +68,7 @@
 #define EP1_SIZE 0x40
 #define PLAYBACK_BUFFER 0x100000
 // multiple of SAMPLESIZE.  30 minute buffer
-#define RECORD_BUFFER (SAMPLESIZE * 44100 * 60 * 30)
+#define RECORD_BUFFER (SAMPLESIZE * SAMPLERATE * 60 * 30)
 // number of bytes to send from the CP33 at a time.  Limited by settings.h
 #define I2S_FRAGMENT_SIZE (64 * CHANNELS * sizeof(int))
 
@@ -76,13 +77,13 @@
 
 // reverb
 int do_reverb = 0;
-// in samples
+// in samples including reverb_delay1
 int reverb_len = SAMPLERATE;
 int reverb_refs = 150;
 // DEBUG
 //int reverb_refs = 1;
-// ms delay before 1st reflection in addition to the FFT delay
-int reverb_delay1 = 20;
+// sample delay before 1st reflection in addition to the FFT delay
+int reverb_delay1 = 20 * SAMPLERATE / 1000;
 // 1st reflection level in DB
 float reverb_level1 = -24.0f;
 // DEBUG
@@ -94,7 +95,9 @@ int reverb_lowpass = 6000;
 
 float *reverb_bufs[CHANNELS];
 int *reverb_channels[CHANNELS];
+// reflection delays in samples
 int *reverb_offsets[CHANNELS];
+// reflection level in linear fractions
 float *reverb_levels[CHANNELS];
 
 #define FFT_WINDOW 2048
@@ -1797,6 +1800,14 @@ float from_db(float db)
 void init_reverb()
 {
     int i, j;
+    if(reverb_delay1 <= reverb_len)
+    {
+        printf("init_reverb %d: reverb_delay1 %d must be less than reverb_len %d\n",
+            __LINE__,
+            reverb_delay1,
+            reverb_len);
+    }
+
     for(i = 0; i < CHANNELS; i++)
     {
         reverb_bufs[i] = calloc(sizeof(float), reverb_len + FRAGMENT);
@@ -1807,6 +1818,12 @@ void init_reverb()
         reverb_channels[i][0] = i;
         reverb_offsets[i][0] = reverb_delay1;
         reverb_levels[i][0] = from_db(reverb_level1);
+// printf("init_reverb %d i=%d j=%d delay=%d level=%f\n", 
+// __LINE__, 
+// i, 
+// 0, 
+// reverb_offsets[i][0], 
+// reverb_levels[i][0]);
         for(j = 1; j < reverb_refs; j++)
         {
             reverb_channels[i][j] = rand() % CHANNELS;
@@ -1815,7 +1832,12 @@ void init_reverb()
                 (rand() % (reverb_len - reverb_delay1) / reverb_refs);
             reverb_levels[i][j] = from_db(reverb_level1 + 
                 (reverb_level2 - reverb_level1) * j / reverb_refs);
-//printf("init_reverb %d i=%d j=%d level=%f\n", __LINE__, i, j, reverb_levels[i][j]);
+// printf("init_reverb %d i=%d j=%d delay=%d level=%f\n", 
+// __LINE__, 
+// i, 
+// j, 
+// reverb_offsets[i][j], 
+// reverb_levels[i][j]);
         }
         
         fft_dissolved[i] = calloc(sizeof(float), FFT_WINDOW);
