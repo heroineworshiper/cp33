@@ -25,6 +25,7 @@
 // ./pdftoreader /home/archive/scherzo4b.pdf 1 99 135,0 2292,3567 scherzo4.reader
 // ./pdftoreader /home/archive/Chopin_Scherzo_No.1\,_Op.20_Joseffy.pdf 1 99 135,0 2292,4000 scherzo1.reader
 // ./pdftoreader /home/archive/Chopin_-_Impromptu_no_3_\(Paderewski\).pdf 1 99 69,78 2382,3273 impromptu3.reader
+// ./pdftoreader "/home/archive/FChopin_Impromptu_No.1,_Op.29_Joseffy.pdf" 1 99 114,42 2334,3240 impromptu1.reader
 
 // compress the reader files with the lowest setting
 // gzip impromptu3.reader
