@@ -26,6 +26,9 @@
 // ./pdftoreader /home/archive/Chopin_Scherzo_No.1\,_Op.20_Joseffy.pdf 1 99 135,0 2292,4000 scherzo1.reader
 // ./pdftoreader /home/archive/Chopin_-_Impromptu_no_3_\(Paderewski\).pdf 1 99 69,78 2382,3273 impromptu3.reader
 // ./pdftoreader "/home/archive/FChopin_Impromptu_No.1,_Op.29_Joseffy.pdf" 1 99 114,42 2334,3240 impromptu1.reader
+// ./pdftoreader "/home/archive/Liszt_-_S172_Consolations.pdf" 3 6 291,420 1887,2664 liszt_consolation2.reader
+// ./pdftoreader "/home/archive/Liszt_-_S178_Sonata_in_B_minor_\(Schirmer\).pdf" 4 37 42,81 2439,3195 liszt_sonata.reader
+// ./pdftoreader ~archive/IMSLP364885-PMLP542895-op08_Etudes.pdf 72 79 177,294 2109,2850 kosenko.reader
 
 // compress the reader files with the lowest setting
 // gzip impromptu3.reader
