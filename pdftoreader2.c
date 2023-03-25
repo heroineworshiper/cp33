@@ -1,6 +1,6 @@
 /*
  * MUSIC READER
- * Copyright (C) 2021 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2021-2023 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
 
 
 
-// convert a PDF to a baked image stack for reader.C
-// gcc -O3 -g -o pdftoreader pdftoreader.c -lpng
+// convert a PDF or other image file to a baked image stack for reader.C
+// gcc -O3 -g -o pdftoreader2 pdftoreader2.c -lpng -ljpeg
 
 
 
@@ -32,22 +32,59 @@
 #include <string.h>
 #include <stdint.h>
 #include <png.h>
+#include "jpeglib.h"
+#include <setjmp.h>
 
 
 #define DISPLAY_W 768
 #define DISPLAY_H 1366
 #define TEXTLEN 1024
 #define DPI 300
-// greyscale value for white
-//#define THRESHOLD 0x80
-#define THRESHOLD 204
+// default greyscale value for white
+#define THRESHOLD 128
 
-int page1;
-int page2;
+int page1 = 1;
+int page2 = 9999;
+char **sources = 0;
 int total_sources = 0;
-int crop_x, crop_y, crop_w, crop_h;
+// dest without the .gz
+char *dest = 0;
+// dest with the .gz
+char *dest2 = 0;
+int crop_x = 0;
+int crop_y = 0;
+int crop_w = 9999;
+int crop_h = 9999;
 int crop_w2, crop_h2;
+int dpi = DPI;
+int threshold = THRESHOLD;
 FILE *dest_fd;
+
+char* get_suffix(char *dst, char *path)
+{
+    char *ptr = path + strlen(path) - 1;
+    *dst = 0;
+    while(ptr > path && *ptr != '.')
+    {
+        ptr--;
+    }
+    if(ptr == path) return 0;
+// skip the .
+    ptr++;
+    char *ptr2 = dst;
+    while(*ptr != '\"' && *ptr != 0)
+        *ptr2++ = *ptr++;
+    *ptr2 = 0;
+    return dst;
+}
+
+char* skipwhite(char *ptr)
+{
+    while(*ptr != 0 && (*ptr == ' ' || *ptr == '\t' || *ptr == '\n'))
+        ptr++;
+    
+    return ptr;
+}
 
 // convert a space separated string to an array of ints
 void texttoarray(int *dst, int *len, char *text)
@@ -176,7 +213,7 @@ void process_frame(uint8_t *src, int src_w, int src_h)
                     }
                 }
 
-                if(value > THRESHOLD)
+                if(value > threshold)
                 {
                     dst_row[col] |= component;
                 }
@@ -204,31 +241,194 @@ void png_read_function(png_structp png_ptr,
 	read_ptr += length;
 };
 
+uint8_t* read_source(char *path, int *size_return)
+{
+    FILE *fd = fopen(path, "r");
+    if(!fd)
+    {
+        printf("Couldn't open source %s\n", path);
+        exit(1);
+    }
+    fseek(fd, 0, SEEK_END);
+    int size = ftell(fd);
+    fseek(fd, 0, SEEK_SET);
+    uint8_t *buffer = malloc(size);
+    int _ = fread(buffer, 1, size, fd);
+    fclose(fd);
+    *size_return = size;
+    return buffer;
+}
+
+
+typedef struct 
+{
+	struct jpeg_source_mgr pub;	/* public fields */
+
+	JOCTET * buffer;		/* start of buffer */
+	int bytes;             /* total size of buffer */
+} jpeg_source_mgr_t;
+typedef jpeg_source_mgr_t* jpeg_src_ptr;
+
+
+struct my_jpeg_error_mgr {
+  struct jpeg_error_mgr pub;	/* "public" fields */
+  jmp_buf setjmp_buffer;	/* for return to caller */
+};
+
+typedef struct my_jpeg_error_mgr* my_jpeg_error_ptr;
+struct my_jpeg_error_mgr my_jpeg_error;
+
+METHODDEF(void) init_source(j_decompress_ptr cinfo)
+{
+    jpeg_src_ptr src = (jpeg_src_ptr) cinfo->src;
+}
+
+METHODDEF(boolean) fill_input_buffer(j_decompress_ptr cinfo)
+{
+	jpeg_src_ptr src = (jpeg_src_ptr) cinfo->src;
+#define   M_EOI     0xd9
+
+	src->buffer[0] = (JOCTET)0xFF;
+	src->buffer[1] = (JOCTET)M_EOI;
+	src->pub.next_input_byte = src->buffer;
+	src->pub.bytes_in_buffer = 2;
+
+	return TRUE;
+}
+
+
+METHODDEF(void) skip_input_data(j_decompress_ptr cinfo, long num_bytes)
+{
+	jpeg_src_ptr src = (jpeg_src_ptr)cinfo->src;
+
+	src->pub.next_input_byte += (size_t)num_bytes;
+	src->pub.bytes_in_buffer -= (size_t)num_bytes;
+}
+
+
+METHODDEF(void) term_source(j_decompress_ptr cinfo)
+{
+}
+
+METHODDEF(void) my_jpeg_output (j_common_ptr cinfo)
+{
+}
+
+
+METHODDEF(void) my_jpeg_error_exit (j_common_ptr cinfo)
+{
+/* cinfo->err really points to a mjpeg_error_mgr struct, so coerce pointer */
+  	my_jpeg_error_ptr mjpegerr = (my_jpeg_error_ptr) cinfo->err;
+
+printf("my_jpeg_error_exit %d\n", __LINE__);
+/* Always display the message. */
+/* We could postpone this until after returning, if we chose. */
+  	(*cinfo->err->output_message) (cinfo);
+
+/* Return control to the setjmp point */
+  	longjmp(mjpegerr->setjmp_buffer, 1);
+}
 
 int main(int argc, char *argv[])
 {
-    if(argc < 6)
+    if(argc < 2)
     {
         char *progname = argv[0];
-        printf("Usage: %s <source files> <1st page> <last page inclusive> <crop x,y> <crop w,h> <dest file>\n", 
-            progname);
-        printf("The cropping coordinates are DPI %d\n", DPI);
-        printf("Example: %s /home/archive/scherzo4b.pdf 1 99 135,0 2294,3567 scherzo4.reader\n", progname);
-        printf("Example: %s /home/archive/rbg*.png 1 99 231,0 2982x4400 rbg.reader\n", progname);
-        printf("Example: %s /home/archive/separate*.png 1 99 0,0 9999x9999 separate.reader\n", progname);
+        printf("Usage: %s <config file>\n", progname);
+        printf("The config file contains commands:\n");
+        printf("# comment line\n");
+        printf("SRC <source file> this appears multiple times if individual image files\n");
+        printf("DST <dest file> this appears once.  If it ends in .gz, it's compressed\n");
+        printf("DPI <source dpi if PDF> default %d\n", DPI);
+        printf("CROP <x y w h> cropping dimensions.  W & H are truncated to the source.\n");
+        printf("THRESHOLD <0-255> greyscale value for white.  default %d\n", THRESHOLD);
+        printf("PAGES <start & end page if PDF> starting page starts at 1.  Ending page is inclusive & truncated to the source pages.\n");
+        printf("\nExample config file:\n");
+        printf("SRC /home/archive/scherzo4.pdf\n");
+        printf("DST /home/archive/scherzo4.reader.gz\n");
+        printf("PAGES 1 9999\n");
+        printf("CROP 135 0 2294 3567\n");
         exit(1);
     }
-    
+
     char string[TEXTLEN];
-    char **sources = &argv[1];
-    total_sources = argc - 6;
-    page1 = atoi(argv[1 + total_sources]);
-    page2 = atoi(argv[2 + total_sources]);
-    argtoxy(&crop_x, &crop_y, argv[3 + total_sources]);
-    argtoxy(&crop_w, &crop_h, argv[4 + total_sources]);
-    char *dest = argv[5 + total_sources];
-    int i, j;
+    FILE *config_fd = fopen(argv[1], "r");
+    if(!config_fd)
+    {
+        printf("Couldn't open config file %s\n", argv[1]);
+        exit(1);
+    }
+
+    while(!feof(config_fd))
+    {
+        char *line = fgets(string, TEXTLEN, config_fd);
+        if(!line || line[0] == 0) break;
+        char *ptr = skipwhite(line);
+// comment line or empty
+        if(*ptr == '#' || *ptr == 0) continue;
+
+// get the command
+        char command[TEXTLEN];
+        char *ptr2 = command;
+        while(*ptr != 0 && *ptr != ' ' && *ptr != '\t' && *ptr != '\n')
+            *ptr2++ = *ptr++;
+        *ptr2 = 0;
+
+        ptr = skipwhite(ptr);
+
+// get the arguments
+        char args[TEXTLEN];
+        ptr2 = args;
+        while(*ptr != 0 && *ptr != '\n')
+            *ptr2++ = *ptr++;
+        *ptr2 = 0;
+        
+//        printf("command=%s args=%s\n", command, args);
+        if(!strcasecmp(command, "SRC"))
+        {
+            sources = realloc(sources, (total_sources + 1) * sizeof(char*));
+            sources[total_sources] = strdup(args);
+            total_sources++;
+        }
+        else
+        if(!strcasecmp(command, "DST"))
+        {
+            dest = strdup(args);
+        }
+        else
+        if(!strcasecmp(command, "DPI"))
+        {
+            dpi = atoi(args);
+        }
+        else
+        if(!strcasecmp(command, "CROP"))
+        {
+            int dst[4];
+            int len;
+            texttoarray(dst, &len, args);
+            crop_x = dst[0];
+            crop_y = dst[1];
+            crop_w = dst[2];
+            crop_h = dst[3];
+        }
+        else
+        if(!strcasecmp(command, "PAGES"))
+        {
+            int dst[2];
+            int len;
+            texttoarray(dst, &len, args);
+            page1 = dst[0];
+            page2 = dst[1];
+        }
+        else
+        if(!strcasecmp(command, "THRESHOLD"))
+        {
+            threshold = atoi(args);
+        }
+    }
+    fclose(config_fd);
     
+    int i, j;
     printf("Sources:\n");
     for(i = 0; i < total_sources; i++)
     {
@@ -238,7 +438,17 @@ int main(int argc, char *argv[])
     printf("Page 2: %d\n", page2);
     printf("Crop: %d,%d %dx%d\n", crop_x, crop_y, crop_w, crop_h);
     printf("Dest: %s\n", dest);
-    
+    printf("DPI: %d\n", dpi);
+    printf("Threshold: %d\n", threshold);
+    crop_w2 = crop_w;
+    crop_h2 = crop_h;
+
+    if(!strcasecmp(dest + strlen(dest) - 3, ".gz"))
+    {
+        dest2 = strdup(dest);
+        dest[strlen(dest) - 3] = 0;
+    }
+
     dest_fd = fopen(dest, "w");
     if(!dest_fd)
     {
@@ -250,19 +460,21 @@ int main(int argc, char *argv[])
     int temp = 0;
     fwrite(&display_w, 1, 4, dest_fd);
     fwrite(&display_h, 1, 4, dest_fd);
-// number of pages
+// placeholder for number of pages
     int page_offset = ftell(dest_fd);
     fwrite(&temp, 1, 4, dest_fd);
 
 
     int current_page = 1;
     int total_pages = 0;
+    char suffix[TEXTLEN];
+    get_suffix(suffix, sources[0]);
 // open PDF
-    if(!strcasecmp(sources[0] + strlen(sources[0]) - 4, ".pdf"))
+    if(!strcasecmp(suffix, "pdf"))
     {
         sprintf(string, 
             "gs -dBATCH -dNOPAUSE -sDEVICE=pnm -o - -r%d %s", 
-            DPI, 
+            dpi, 
             sources[0]);
 
 // escape the special characters
@@ -401,23 +613,18 @@ int main(int argc, char *argv[])
         fclose(fd);
     }
     else
-    if(!strcasecmp(sources[0] + strlen(sources[0]) - 4, ".png"))
+    if(!strcasecmp(suffix, "png"))
     {
         for(i = 0; i < total_sources; i++)
         {
             printf("Reading page %s\n", sources[i]);
-            FILE *fd = fopen(sources[i], "r");
-            fseek(fd, 0, SEEK_END);
-            int size = ftell(fd);
-            fseek(fd, 0, SEEK_SET);
-            uint8_t *buffer = malloc(size);
+            int size;
+            uint8_t *buffer = read_source(sources[i], &size);
             uint8_t *frame_buffer = 0;
             uint8_t **rows = 0;
             uint8_t *src_ptr;
             uint8_t *dst_ptr;
-            int _ = fread(buffer, 1, size, fd);
-            fclose(fd);
-            
+
             read_ptr = buffer;
             read_end = buffer + size;
 		    png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, 0, 0, 0);
@@ -505,6 +712,115 @@ int main(int argc, char *argv[])
         }
     }
     else
+    if(!strcasecmp(suffix, "jpg"))
+    {
+        for(i = 0; i < total_sources; i++)
+        {
+            printf("Reading page %s\n", sources[i]);
+            int size;
+            uint8_t *buffer = read_source(sources[i], &size);
+            uint8_t *frame_buffer = 0;
+            uint8_t **rows = 0;
+            uint8_t *src_ptr;
+            uint8_t *dst_ptr;
+
+	        struct jpeg_decompress_struct cinfo;
+	        struct my_jpeg_error_mgr jerr;
+	        cinfo.err = jpeg_std_error(&(my_jpeg_error.pub));
+            my_jpeg_error.pub.error_exit = my_jpeg_error_exit;
+            my_jpeg_error.pub.output_message = my_jpeg_output;
+	        jpeg_create_decompress(&cinfo);
+	        cinfo.src = (struct jpeg_source_mgr*)
+    	        (*cinfo.mem->alloc_small)((j_common_ptr)&cinfo, 
+                JPOOL_PERMANENT,
+		        sizeof(jpeg_source_mgr_t));
+	        jpeg_src_ptr src = (jpeg_src_ptr)cinfo.src;
+	        src->pub.init_source = init_source;
+	        src->pub.fill_input_buffer = fill_input_buffer;
+	        src->pub.skip_input_data = skip_input_data;
+	        src->pub.resync_to_restart = jpeg_resync_to_restart; /* use default method */
+	        src->pub.term_source = term_source;
+	        src->pub.bytes_in_buffer = size;
+	        src->pub.next_input_byte = buffer;
+	        src->buffer = buffer;
+	        src->bytes = size;
+	        jpeg_read_header(&cinfo, 1);
+	        jpeg_start_decompress(&cinfo);
+
+            int src_w = cinfo.output_width;
+            int src_h = cinfo.output_height;
+            
+            
+            if(cinfo.jpeg_color_space == JCS_RGB)
+            {
+                frame_buffer = (uint8_t*)malloc(src_w * src_h * 3);
+                rows = malloc(src_h * sizeof(uint8_t*));
+                for(j = 0; j < src_h; j++)
+                {
+                    rows[j] = frame_buffer + src_w * j * 3;
+                }
+            }
+            else
+            if(cinfo.jpeg_color_space == JCS_GRAYSCALE)
+            {
+                frame_buffer = (uint8_t*)malloc(src_w * src_h);
+                rows = malloc(src_h * sizeof(uint8_t*));
+                for(j = 0; j < src_h; j++)
+                {
+                    rows[j] = frame_buffer + src_w * j;
+                }
+            }
+            else
+            {
+                printf("Unknown JPEG colorspace.\n");
+                exit(1);
+            }
+
+	        while(cinfo.output_scanline < src_h)
+	        {
+		        int num_scanlines = jpeg_read_scanlines(&cinfo, 
+			        &rows[cinfo.output_scanline],
+			        src_h - cinfo.output_scanline);
+	        }
+
+// RGB -> greyscale
+            if(cinfo.jpeg_color_space == JCS_RGB)
+            {
+                src_ptr = frame_buffer;
+                dst_ptr = frame_buffer;
+                for(j = 0; j < src_w * src_h; j++)
+                {
+                    *dst_ptr++ = *src_ptr;
+                    src_ptr += 3;
+                }
+            }
+
+            jpeg_destroy_decompress(&cinfo);
+
+            crop_w2 = crop_w;
+            crop_h2 = crop_h;
+            if(src_w < crop_x + crop_w2)
+            {
+                crop_w2 = src_w - crop_x;
+                printf("main %d: truncating crop_w to %d\n", __LINE__, crop_w2);
+            }
+
+            if(src_h < crop_y + crop_h2)
+            {
+                crop_h2 = src_h - crop_y;
+                printf("main %d: truncating crop_h to %d\n", __LINE__, crop_h2);
+            }
+
+
+            process_frame(frame_buffer, src_w, src_h);
+            free(buffer);
+            free(frame_buffer);
+            free(rows);
+            current_page++;
+            total_pages++;
+        }
+    }
+    else
     {
         printf("Unrecognized input format.\n");
     }
@@ -515,7 +831,14 @@ int main(int argc, char *argv[])
     
 
     fclose(dest_fd);
-    
+    if(dest2)
+    {
+        sprintf(string, "gzip -9 %s", dest);
+        printf("Compressing\n");
+        int _ = system(string);
+    }    
+
+
     return 0;
 }
 

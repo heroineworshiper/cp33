@@ -32,6 +32,11 @@ cp33.pcb: I2S capture board
 
 recordcp33.c: Original linux program that converted USB output to a sound file.
 
+pdftoreader.c: obsolete sheet music converter
+pdftoreader2.c: Convert sheet music to compressed reader files.
+
+reader.conf: example configuration file for pdftoreader2
+
 piano.c, pianoserver.c, piano.h: the executable for the realtime audio processor
 
 index.html, metro.wav favicon.ico record.png stop.png single.gif: assets for the GUI
@@ -149,6 +154,11 @@ xinput --list-props "McLionhead Trackpad"
 xinput --set-prop "McLionhead Trackpad" "libinput Accel Speed" 0
 nohup ./reader >& /dev/null&
 
+
+The server uses page turning buttons connected to GPIO 13, GPIO 14, GND
+on the pi B.  The pin numbering is pins 21, 23, 25.  The GPIO numbers
+changed on later pi's so there are no more pictures showing the original
+GPIO numbers.
 
 
 
