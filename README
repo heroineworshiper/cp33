@@ -37,6 +37,12 @@ pdftoreader2.c: Convert sheet music to compressed reader files.
 
 reader.conf: example configuration file for pdftoreader2
 
+
+reader_server.sh
+reader_client.sh
+piano.sh: wrapper scripts for running the programs on startup
+
+
 piano.c, pianoserver.c, piano.h: the executable for the realtime audio processor
 
 index.html, metro.wav favicon.ico record.png stop.png single.gif: assets for the GUI

@@ -1,6 +1,6 @@
 /*
  * MUSIC READER
- * Copyright (C) 2021 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2021-2023 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -741,7 +741,7 @@ void load_file_entry(char *path)
     send_command(LOAD_FILE, 
         (uint8_t*)path, 
         strlen(path) + 1);
-    load_file(path);
+    ::load_file(path);
     wait_command();
 #else
     ::load_file(path);
