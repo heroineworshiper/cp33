@@ -698,8 +698,33 @@ int main(int argc, char *argv[])
                     process_frame(frame_buffer, src_w, src_h);
                     break;
                 
+                case PNG_COLOR_TYPE_PALETTE:
+                {
+                    png_set_palette_to_rgb(png_ptr);
+	                if (png_get_bit_depth(png_ptr, info_ptr) <= 8)
+                        png_set_expand(png_ptr);
+                    frame_buffer = (uint8_t*)malloc(src_w * src_h * 3);
+                    for(j = 0; j < src_h; j++)
+                    {
+                        rows[j] = frame_buffer + j * src_w * 3;
+                    }
+                    png_read_image(png_ptr, rows);
+
+                    src_ptr = frame_buffer;
+                    dst_ptr = frame_buffer;
+                    for(j = 0; j < src_w * src_h; j++)
+                    {
+                        *dst_ptr++ = *src_ptr;
+                        src_ptr += 3;
+                    }
+                    process_frame(frame_buffer, src_w, src_h);
+                    break;
+                }
+                
                 default:
-                    printf("main %d: unknown color space\n", __LINE__);
+                    printf("main %d: unknown color space %d\n", 
+                        __LINE__, 
+                        png_get_color_type(png_ptr, info_ptr));
                     break;
             }
             
