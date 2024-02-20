@@ -33,8 +33,8 @@ void start_recording();
 void stop_recording();
 void set_speaker(int value);
 void set_line(int value);
-void handle_input(char *state);
-void handle_update(char *state);
+int handle_input(char *state, int version);
+void handle_update(char *state, int version);
 void save_settings();
 
 

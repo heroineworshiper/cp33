@@ -1,0 +1,459 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TableLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:theme="@style/ThemeOverlay.CP33.FullscreenContainer"
+    tools:context=".FullscreenActivity">
+
+    <TableRow
+        android:layout_width="match_parent" >
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="left|center_vertical"
+            android:layout_weight="4"
+            android:text="Address:" />
+
+        <EditText
+            android:id="@+id/address"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="10"
+            android:visibility="visible">
+
+        </EditText>
+    </TableRow>
+
+    <TableRow
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:text="Volume:"
+            android:textSize="20sp" />
+    </TableRow>
+
+
+    <TableRow
+        android:layout_width="wrap_content" >
+
+        <EditText
+            android:id="@+id/volume_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="2"
+            android:text="0">
+
+        </EditText>
+
+        <SeekBar
+            android:id="@+id/volume"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_weight="8" />
+    </TableRow>
+
+
+    <TableRow
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:text="Metronome Volume:"
+            android:textSize="20sp" />
+    </TableRow>
+
+    <TableRow
+        android:layout_width="match_parent" >
+
+        <EditText
+            android:id="@+id/metronome_volume_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="2"
+            android:text="0"></EditText>
+
+        <SeekBar
+            android:id="@+id/metronome_volume"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_weight="8" />
+     </TableRow>
+
+
+    <TableRow
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <View
+            android:id="@+id/divider"
+            android:layout_width="0dp"
+            android:layout_height="5dp"
+            android:layout_weight="1"
+            android:background="?android:attr/listDivider" />
+
+
+    </TableRow>
+
+    <TableRow
+        android:layout_width="wrap_content" >
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_weight="2"
+            android:text="BPM:" />
+
+
+        <EditText
+            android:id="@+id/bpm_text"
+            android:layout_width="0dp"
+            android:layout_weight="10"
+            android:text="0">
+
+        </EditText>
+
+
+    </TableRow>
+
+
+
+    <TableRow
+        android:layout_width="wrap_content" >
+
+
+        <Button
+            android:id="@+id/apply1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:layout_weight=".5"
+            android:text="APPLY" />
+
+        <EditText
+            android:id="@+id/preset1_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight=".5"
+            android:text="0">
+
+        </EditText>
+
+
+        <Button
+            android:id="@+id/update1"
+            android:layout_width="0dip"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:layout_weight=".5"
+            android:text="UPDATE" />
+
+    </TableRow>
+
+    <TableRow
+        android:layout_width="wrap_content" >
+
+
+        <Button
+            android:id="@+id/apply2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:layout_weight=".5"
+            android:text="APPLY" />
+
+        <EditText
+            android:id="@+id/preset2_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight=".5"
+            android:text="0">
+
+        </EditText>
+
+
+        <Button
+            android:id="@+id/update2"
+            android:layout_width="0dip"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:layout_weight=".5"
+            android:text="UPDATE" />
+
+    </TableRow>
+
+
+    <TableRow
+        android:layout_width="wrap_content" >
+
+
+        <Button
+            android:id="@+id/apply3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:layout_weight=".5"
+            android:text="APPLY" />
+
+        <EditText
+            android:id="@+id/preset3_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight=".5"
+            android:text="0">
+
+        </EditText>
+
+
+        <Button
+            android:id="@+id/update3"
+            android:layout_width="0dip"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:layout_weight=".5"
+            android:text="UPDATE" />
+
+    </TableRow>
+
+
+    <TableRow
+        android:layout_width="wrap_content" >
+
+
+        <Button
+            android:id="@+id/apply4"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:layout_weight=".5"
+            android:text="APPLY" />
+
+        <EditText
+            android:id="@+id/preset4_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight=".5"
+            android:text="0">
+
+        </EditText>
+
+
+        <Button
+            android:id="@+id/update4"
+            android:layout_width="0dip"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:layout_weight=".5"
+            android:text="UPDATE" />
+
+    </TableRow>
+
+
+    <TableRow
+        android:layout_width="wrap_content" >
+
+
+        <Button
+            android:id="@+id/apply5"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:layout_weight=".5"
+            android:text="APPLY" />
+
+        <EditText
+            android:id="@+id/preset5_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight=".5"
+            android:text="0">
+
+        </EditText>
+
+
+        <Button
+            android:id="@+id/update5"
+            android:layout_width="0dip"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:layout_weight=".5"
+            android:text="UPDATE" />
+
+    </TableRow>
+
+
+    <TableRow
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <Switch
+            android:id="@+id/metronome"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_weight="1" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_weight="1"
+            android:text="Metronome" />
+
+
+    </TableRow>
+
+
+
+    <TableRow
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <Switch
+            android:id="@+id/reverb"
+            android:layout_width="0dp"
+            android:layout_height="50dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_weight="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_weight="1"
+            android:text="Reverb" />
+
+        <Switch
+            android:id="@+id/compress"
+            android:layout_width="0dp"
+            android:layout_height="50dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_weight="1"
+            android:visibility="gone"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_weight="1"
+            android:text="Compress"
+            android:visibility="gone" />
+
+
+    </TableRow>
+
+
+    <TableRow
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="LAST FILE:" />
+
+        <TextView
+            android:id="@+id/filename"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="" />
+
+
+    </TableRow>
+
+
+    <TableRow
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="RECORDED:" />
+
+        <TextView
+            android:id="@+id/recorded"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="" />
+
+
+    </TableRow>
+
+
+    <TableRow
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="REMANE:" />
+
+        <TextView
+            android:id="@+id/remaneing"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="" />
+
+
+    </TableRow>
+
+
+    <TableRow
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="GLITCHES:" />
+
+        <TextView
+            android:id="@+id/glitches"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="" />
+
+
+    </TableRow>
+
+
+
+    <TableRow
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <Switch
+            android:id="@+id/record"
+            android:layout_width="100dp"
+            android:layout_height="50dp"
+            android:layout_gravity="center_horizontal" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:text="RECORD" />
+
+
+    </TableRow>
+
+</TableLayout>

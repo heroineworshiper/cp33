@@ -60,8 +60,12 @@ ARM_BOOTLOADER_OBJS := \
 
 all: cp33.bin bootloader.bin recordcp33 passthrough
 
-piano: piano.c
-	$(GCC) -o piano piano.c $(USB_DIR)/libusb/.libs/libusb-1.0.a -I$(USB_DIR)/libusb -lrt -lpthread
+piano: piano.c pianoserver.o metro.o
+	$(GCC) -o piano piano.c pianoserver.c metro.o $(USB_DIR)/libusb/.libs/libusb-1.0.a -I$(USB_DIR)/libusb -lrt -lpthread -lm -lasound
+
+metro.o: metro.wav
+#	objcopy -B arm -I binary -O elf32-littlearm metro.wav metro.o
+	objcopy -B i386 -I binary -O elf64-x86-64 metro.wav metro.o
 
 cp33.bin: $(ARM_OBJS)
 	$(GCC_ARM) -o cp33.elf \

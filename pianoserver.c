@@ -1,7 +1,7 @@
 /*
  * Piano audio processor
  *
- * Copyright (C) 2021 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2021-2024 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,9 @@
 
 
 
-// web server
+// UDP or HTTP server
 
+#define USE_UDP
 
 #include <arpa/inet.h>
 #include <ctype.h>
@@ -43,6 +44,11 @@
 #include <pthread.h>
 #include "piano.h"
 
+
+
+#define UDP_RECV_PORT 1234
+#define UDP_SEND_PORT 1235
+#define BUFSIZE 1024
 
 
 
@@ -214,7 +220,7 @@ void web_server_connection(void *ptr)
                                         *ptr2++ = *ptr++;
 									}
                                     *ptr2 = 0;
-                                    handle_input(string);
+                                    handle_input(string, 0);
                                 }
 							}
 						}
@@ -233,7 +239,7 @@ void web_server_connection(void *ptr)
 // send current state of the board
 // must write seconds instead of samples because javascript can't handle 64 bits
 					pthread_mutex_lock(&www_mutex);
-                    handle_update(string);
+                    handle_update(string, 0);
 					pthread_mutex_unlock(&www_mutex);
 //printf("web_server_connection %d: update=%s\n", __LINE__, string);
 					
@@ -312,6 +318,100 @@ void start_connection(webserver_connection_t *connection, int fd)
 
 void web_server(void *ptr)
 {
+#ifdef USE_UDP
+
+    uint8_t packet[BUFSIZE];
+    int read_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	struct sockaddr_in read_addr;
+    struct sockaddr_in peer_addr;
+    socklen_t peer_addr_len = sizeof(struct sockaddr_in);
+	read_addr.sin_family = AF_INET;
+	read_addr.sin_port = htons((unsigned short)UDP_RECV_PORT);
+	read_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	if(bind(read_socket, 
+		(struct sockaddr*)&read_addr, 
+		sizeof(read_addr)) < 0)
+	{
+		perror("web_server: bind");
+        exit(1);
+	}
+
+    while(1)
+    {
+        int bytes_read = recvfrom(read_socket,
+            packet, 
+            BUFSIZE, 
+            0,
+            (struct sockaddr *) &peer_addr, 
+            &peer_addr_len);
+
+//        printf("web_server %d: bytes_read=%d\n", __LINE__, bytes_read);
+        uint8_t code[] = { 
+            0xd0, 0x21, 0x39, 0xed, 0x63, 0x62, 0x47, 0x24, 
+            0x9b, 0xed, 0x54, 0x0d, 0x24, 0xe2, 0x61, 0xf1 
+        };
+        int i;
+        int got_it = 1;
+        if(bytes_read < sizeof(code) + 1) got_it = 0;
+        for(i = 0; i < sizeof(code) && got_it; i++)
+        {
+            if(packet[i] != code[i]) 
+            {
+                got_it = 0;
+                break;
+            }
+        }
+        if(got_it)
+        {
+            packet[bytes_read] = 0;
+            int offset = sizeof(code);
+            printf("web_server %d: got \"%s\"\n", 
+                __LINE__, 
+                packet + offset);
+// contains user input
+            if(packet[offset] == '1')
+                offset += handle_input(packet + offset + 1, 1);
+            offset++;
+
+// extract hostname since peer_addr just contains the router
+// The router might be masquerading
+            char *peer = packet + offset;
+            printf("web_server %d: peer=%s peer_addr=%s\n", 
+                __LINE__, 
+                peer,
+                inet_ntoa(peer_addr.sin_addr));
+            struct hostent *hostinfo = gethostbyname(peer);
+
+            memcpy(packet, code, sizeof(code));
+            handle_update(packet + sizeof(code), 1);
+// create write socket for IPV4
+	        int write_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	        struct sockaddr_in write_addr;
+	        write_addr.sin_family = AF_INET;
+	        write_addr.sin_port = htons((unsigned short)UDP_SEND_PORT);
+            write_addr.sin_addr = *(struct in_addr *)hostinfo->h_addr;
+//            write_addr.sin_addr = peer_addr.sin_addr;
+
+// symbolic connection to the peer
+	        if(connect(write_socket, 
+		        (struct sockaddr*)&write_addr, 
+		        sizeof(write_addr)) < 0)
+	        {
+		        perror("web_server: connect");
+	        }
+
+//printf("web_server %d: write_socket=%d\n", __LINE__, write_socket);
+            write(write_socket, 
+                packet, 
+                sizeof(code) + strlen(packet + sizeof(code)));
+            close(write_socket);
+        }
+    }
+
+
+#else // USE_UDP
+
 	int i;
 	for(i = 0; i < TOTAL_CONNECTIONS; i++)
 	{
@@ -361,6 +461,8 @@ void web_server(void *ptr)
 			printf("web_server %d: out of connections\n", __LINE__);
 		}
 	}
+
+#endif // USE_UDP
 }
 
 
