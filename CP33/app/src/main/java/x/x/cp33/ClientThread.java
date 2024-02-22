@@ -32,6 +32,8 @@ import java.util.concurrent.Executors;
 
 class ClientThread implements Runnable {
 
+    static final int MIN_BPM = 30;
+    static final int MAX_BPM = 200;
     static final int SEND_PORT = 1234;
     static final int RECV_PORT = 1235;
     static final int BUFSIZE = 1024;

@@ -51,8 +51,8 @@ public class FullscreenActivity extends AppCompatActivity implements SeekBar.OnS
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         this.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN);
+//        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+//                WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
         binding = ActivityFullscreenBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
@@ -76,6 +76,8 @@ public class FullscreenActivity extends AppCompatActivity implements SeekBar.OnS
         binding.volumeText.addTextChangedListener(this);
         binding.metronomeVolumeText.addTextChangedListener(this);
         binding.bpmText.addTextChangedListener(this);
+        binding.bpmUp.setOnClickListener(this);
+        binding.bpmDown.setOnClickListener(this);
         binding.apply1.setOnClickListener(this);
         binding.apply2.setOnClickListener(this);
         binding.apply3.setOnClickListener(this);
@@ -145,6 +147,8 @@ public class FullscreenActivity extends AppCompatActivity implements SeekBar.OnS
         binding.reverb.setEnabled(x);
         binding.record.setEnabled(x);
         binding.bpmText.setEnabled(x);
+        binding.bpmUp.setEnabled(x);
+        binding.bpmDown.setEnabled(x);
         binding.apply1.setEnabled(x);
         binding.apply2.setEnabled(x);
         binding.apply3.setEnabled(x);
@@ -226,6 +230,22 @@ public class FullscreenActivity extends AppCompatActivity implements SeekBar.OnS
 
     public void onClick(View view) {
         Log.i("FullScreenActivity", "onClick ");
+        if(view == binding.bpmUp)
+        {
+            int value = ClientThread.getInt(binding.bpmText);
+            value++;
+            if(value > ClientThread.MAX_BPM) value = ClientThread.MAX_BPM;
+            binding.bpmText.setText(Integer.toString(value));
+            haveInput = true;
+        }
+        if(view == binding.bpmDown)
+        {
+            int value = ClientThread.getInt(binding.bpmText);
+            value--;
+            if(value < ClientThread.MIN_BPM) value = ClientThread.MIN_BPM;
+            binding.bpmText.setText(Integer.toString(value));
+            haveInput = true;
+        }
         if(view == binding.apply1)
         {
             binding.bpmText.setText(binding.preset1Text.getText());

@@ -35,7 +35,6 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="center_vertical"
             android:text="Volume:"
             android:textSize="20sp" />
     </TableRow>
@@ -48,7 +47,7 @@
             android:id="@+id/volume_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="2"
+            android:layout_weight="1"
             android:text="0">
 
         </EditText>
@@ -81,7 +80,7 @@
             android:id="@+id/metronome_volume_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="2"
+            android:layout_weight="1"
             android:text="0"></EditText>
 
         <SeekBar
@@ -114,17 +113,33 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical"
-            android:layout_weight="2"
+            android:layout_weight=".3"
             android:text="BPM:" />
 
 
         <EditText
             android:id="@+id/bpm_text"
             android:layout_width="0dp"
-            android:layout_weight="10"
-            android:text="0">
+            android:layout_weight="1"
+            android:text="0"
+            android:layout_marginEnd="10dp">
 
         </EditText>
+        <Button
+            android:id="@+id/bpm_up"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:layout_weight=".25"
+            android:text="\u2191"
+            android:layout_marginEnd="10dp"/>
+        <Button
+            android:id="@+id/bpm_down"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:layout_weight=".25"
+            android:text="\u2193" />
 
 
     </TableRow>
@@ -140,15 +155,17 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_gravity="right|center_vertical"
-            android:layout_weight=".5"
-            android:text="APPLY" />
+            android:layout_weight=".25"
+            android:text="\u2191"
+            android:layout_marginEnd="10dp" />
 
         <EditText
             android:id="@+id/preset1_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight=".5"
-            android:text="0">
+            android:layout_weight="1"
+            android:text="0"
+            android:layout_marginEnd="10dp">
 
         </EditText>
 
@@ -158,8 +175,8 @@
             android:layout_width="0dip"
             android:layout_height="wrap_content"
             android:layout_gravity="right|center_vertical"
-            android:layout_weight=".5"
-            android:text="UPDATE" />
+            android:layout_weight=".25"
+            android:text="\u2190" />
 
     </TableRow>
 
@@ -172,15 +189,17 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_gravity="right|center_vertical"
-            android:layout_weight=".5"
-            android:text="APPLY" />
+            android:layout_weight=".25"
+            android:text="\u2191"
+            android:layout_marginEnd="10dp" />
 
         <EditText
             android:id="@+id/preset2_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight=".5"
-            android:text="0">
+            android:layout_weight="1"
+            android:text="0"
+            android:layout_marginEnd="10dp">
 
         </EditText>
 
@@ -190,8 +209,8 @@
             android:layout_width="0dip"
             android:layout_height="wrap_content"
             android:layout_gravity="right|center_vertical"
-            android:layout_weight=".5"
-            android:text="UPDATE" />
+            android:layout_weight=".25"
+            android:text="\u2190" />
 
     </TableRow>
 
@@ -205,15 +224,17 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_gravity="right|center_vertical"
-            android:layout_weight=".5"
-            android:text="APPLY" />
+            android:layout_weight=".25"
+            android:text="\u2191"
+            android:layout_marginEnd="10dp"/>
 
         <EditText
             android:id="@+id/preset3_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight=".5"
-            android:text="0">
+            android:layout_weight="1"
+            android:text="0"
+            android:layout_marginEnd="10dp">
 
         </EditText>
 
@@ -223,8 +244,8 @@
             android:layout_width="0dip"
             android:layout_height="wrap_content"
             android:layout_gravity="right|center_vertical"
-            android:layout_weight=".5"
-            android:text="UPDATE" />
+            android:layout_weight=".25"
+            android:text="\u2190" />
 
     </TableRow>
 
@@ -238,15 +259,17 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_gravity="right|center_vertical"
-            android:layout_weight=".5"
-            android:text="APPLY" />
+            android:layout_weight=".25"
+            android:text="\u2191"
+            android:layout_marginEnd="10dp"/>
 
         <EditText
             android:id="@+id/preset4_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight=".5"
-            android:text="0">
+            android:layout_weight="1"
+            android:text="0"
+            android:layout_marginEnd="10dp">
 
         </EditText>
 
@@ -256,8 +279,8 @@
             android:layout_width="0dip"
             android:layout_height="wrap_content"
             android:layout_gravity="right|center_vertical"
-            android:layout_weight=".5"
-            android:text="UPDATE" />
+            android:layout_weight=".25"
+            android:text="\u2190" />
 
     </TableRow>
 
@@ -268,18 +291,20 @@
 
         <Button
             android:id="@+id/apply5"
-            android:layout_width="0dp"
+            android:layout_width="0dip"
             android:layout_height="wrap_content"
             android:layout_gravity="right|center_vertical"
-            android:layout_weight=".5"
-            android:text="APPLY" />
+            android:layout_weight=".25"
+            android:text="\u2191"
+            android:layout_marginEnd="10dp"/>
 
         <EditText
             android:id="@+id/preset5_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight=".5"
-            android:text="0">
+            android:layout_weight="1"
+            android:text="0"
+            android:layout_marginEnd="10dp">
 
         </EditText>
 
@@ -289,11 +314,25 @@
             android:layout_width="0dip"
             android:layout_height="wrap_content"
             android:layout_gravity="right|center_vertical"
-            android:layout_weight=".5"
-            android:text="UPDATE" />
+            android:layout_weight=".25"
+            android:text="\u2190" />
 
     </TableRow>
 
+
+    <TableRow
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <View
+            android:id="@+id/divider2"
+            android:layout_width="0dp"
+            android:layout_height="5dp"
+            android:layout_weight="1"
+            android:background="?android:attr/listDivider" />
+
+
+    </TableRow>
 
     <TableRow
         android:layout_width="wrap_content"
@@ -303,57 +342,36 @@
             android:id="@+id/metronome"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_weight="1" />
+            android:layout_gravity="left|center_vertical"
+            android:layout_weight=".5" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_gravity="center_vertical"
+            android:layout_gravity="left|center_vertical"
             android:layout_weight="1"
             android:text="Metronome" />
 
-
-    </TableRow>
-
-
-
-    <TableRow
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content">
 
         <Switch
             android:id="@+id/reverb"
             android:layout_width="0dp"
             android:layout_height="50dp"
-            android:layout_gravity="center_horizontal"
-            android:layout_weight="1" />
+            android:layout_gravity="left|center_vertical"
+            android:layout_weight=".5" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="center_vertical"
-            android:layout_weight="1"
+            android:layout_gravity="left|center_vertical"
+            android:layout_weight="0.5"
             android:text="Reverb" />
 
-        <Switch
-            android:id="@+id/compress"
-            android:layout_width="0dp"
-            android:layout_height="50dp"
-            android:layout_gravity="center_horizontal"
-            android:layout_weight="1"
-            android:visibility="gone"/>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_vertical"
-            android:layout_weight="1"
-            android:text="Compress"
-            android:visibility="gone" />
 
 
     </TableRow>
+
+
 
 
     <TableRow
