@@ -57,6 +57,15 @@
 #include "piano.h"
 
 
+// swap playback channels to preserve headphone cable
+#define SWAP_PLAYBACK
+#ifdef SWAP_PLAYBACK
+    #define LEFT 1
+    #define RIGHT 0
+#else
+    #define LEFT 0
+    #define RIGHT 1
+#endif
 #define CHANNELS 2
 #define SAMPLERATE 44100
 #define BITS_PER_SAMPLE 24
@@ -89,9 +98,11 @@ float reverb_level1 = -24.0f;
 // DEBUG
 //float reverb_level1 = 0.0f;
 // last reflection level in DB
-float reverb_level2 = -46.0f;
+float reverb_level2 = -50.0f;
 // lowpass cutoff in HZ
 int reverb_lowpass = 6000;
+// highpass cutoff in HZ
+int reverb_highpass = 164;
 
 float *reverb_bufs[CHANNELS];
 int *reverb_channels[CHANNELS];
@@ -545,6 +556,11 @@ void do_filter(int16_t *alsa_ptr0)
                 ((float)SAMPLERATE / 2 / HALF_WINDOW));
             bzero(fft_output_r[channel] + cutoff, sizeof(float) * (FFT_WINDOW / 2 - cutoff + 1));
             bzero(fft_output_i[channel] + cutoff, sizeof(float) * (FFT_WINDOW / 2 - cutoff + 1));
+// highpass
+            cutoff = (int)(reverb_highpass / 
+                ((float)SAMPLERATE / 2 / HALF_WINDOW));
+            bzero(fft_output_r[channel], sizeof(float) * (cutoff + 1));
+            bzero(fft_output_i[channel], sizeof(float) * (cutoff + 1));
 
             symmetry(fft_output_r[channel], fft_output_i[channel]);
 
@@ -1100,9 +1116,10 @@ void* playback_thread(void *ptr)
                 int32_t *in_ptr2 = in_ptr + 2;
                 for(i = 0; i < FRAGMENT; i++)
                 {
-                    out_ptr[1] = (((*in_ptr++) >> 16) * (FRAGMENT - i) +
+// swap channels for monitoring
+                    out_ptr[RIGHT] = (((*in_ptr++) >> 16) * (FRAGMENT - i) +
                         ((*in_ptr2++) >> 16) * i) / FRAGMENT;
-                    out_ptr[0] = (((*in_ptr++) >> 16) * (FRAGMENT - i) +
+                    out_ptr[LEFT] = (((*in_ptr++) >> 16) * (FRAGMENT - i) +
                         ((*in_ptr2++) >> 16) * i) / FRAGMENT;
                     out_ptr += 2;
                     if(in_ptr >= fifo_end)
@@ -1125,8 +1142,8 @@ void* playback_thread(void *ptr)
                 for(i = 0; i < FRAGMENT; i++)
 		        {
 // swap channels for monitoring
-                    out_ptr[1] = (*in_ptr++) >> 16;
-                    out_ptr[0] = (*in_ptr++) >> 16;
+                    out_ptr[RIGHT] = (*in_ptr++) >> 16;
+                    out_ptr[LEFT] = (*in_ptr++) >> 16;
                     out_ptr += 2;
                     if(in_ptr >= fifo_end)
                     {
