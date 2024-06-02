@@ -1,6 +1,6 @@
 /*
  * MUSIC READER
- * Copyright (C) 2021-2023 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2021-2024 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,6 +29,10 @@
 
 // run this program as a client
 // ./reader -c
+
+// export an image for each page with names output01.png, output02.png...
+// Edit reader.html & load in a browser to view the images.
+// ./reader <input> -e <output>
 
 // compile it on a raspberry:
 // apt install xorg
@@ -85,6 +89,7 @@ int command_result;
 sem_t command_ready;
 sem_t command_done;
 int client_mode = 0;
+const char *export_path = 0;
 
 
 // framebuffer I/O
@@ -645,7 +650,7 @@ int load_annotations()
     }
 }
 
-int load_file(char *path)
+int load_file(const char *path)
 {
     int i;
     printf("load_file %d: loading %s\n", __LINE__, path);
@@ -718,12 +723,24 @@ int load_file(char *path)
 
     load_annotations();
 
+// export all the pages
+    if(export_path)
+    {
+        for(i = 0; i < page_count; i++)
+        {
+            if(MWindow::mwindow->export_page(export_path, i)) break;
+        }
+        exit(0);
+    }
+    else
 // show page 1
-    MWindow::mwindow->show_page(current_page, 1);
+    {
+        MWindow::mwindow->show_page(current_page, 1);
+    }
     return 0;
 }
 
-void load_file_entry(char *path)
+void load_file_entry(const char *path)
 {
     if(file_changed)
     {
@@ -769,18 +786,36 @@ int main(int argc, char *argv[])
 	pthread_attr_t  attr;
 	pthread_attr_init(&attr);
 
-    char *path = 0;
+    const char *path = 0;
+
 // load the image file
     if(argc > 1)
     {
-        if(!strcmp(argv[1], "-c"))
+        for(i = 1; i < argc; i++)
         {
+            if(!strcmp(argv[i], "-c"))
+            {
 // start in client mode without loading a file
-            client_mode = 1;
-        }
-        else
-        {
-            path = argv[1];
+                client_mode = 1;
+            }
+            else
+            if(!strcmp(argv[i], "-e"))
+            {
+                i++;
+                if(i >= argc)
+                {
+                    printf("-e needs a filename\n");
+                    exit(1);
+                }
+                else
+                {
+                    export_path = argv[i];
+                }
+            }
+            else
+            {
+                path = argv[i];
+            }
         }
     }
 

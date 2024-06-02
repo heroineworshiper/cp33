@@ -583,6 +583,113 @@ void MWindow::show_page_fragment(int number,
     }
 }
 
+int MWindow::export_page(const char *export_path, int number)
+{
+    Page *page = pages.get(number);
+// scale it to draw RGB oversampling
+    int dst_w = root_w * 3;
+    int dst_h = root_h * 3;
+    VFrame *dst = new VFrame(dst_w, dst_h, BC_RGB888);
+    
+    for(int i = 0; i < root_h; i++)
+    {
+        uint8_t *src_row = page->image->get_rows()[i];
+        uint8_t *annotation_row = page->annotations->get_rows()[i];
+        uint8_t *dst_row0 = dst->get_rows()[i * 3 + 0];
+        uint8_t *dst_row1 = dst->get_rows()[i * 3 + 1];
+        uint8_t *dst_row2 = dst->get_rows()[i * 3 + 2];
+        for(int j = 0; j < root_w; j++)
+        {
+            uint8_t src_value = *src_row++;
+            uint8_t annotation_value = *annotation_row++;
+            uint8_t r0 = 0;
+            uint8_t g0 = 0;
+            uint8_t b0 = 0;
+            uint8_t r1 = 0;
+            uint8_t g1 = 0;
+            uint8_t b1 = 0;
+            uint8_t r2 = 0;
+            uint8_t g2 = 0;
+            uint8_t b2 = 0;
+
+// foreground layer
+            if((annotation_value & 0xf0))
+            {
+                uint8_t *color = &top_rgb888[(annotation_value >> 4) * 3];
+//printf("MWindow::show_page_fragment %d %d\n", __LINE__, annotation_value);
+                r0 = r1 = r2 = *color++;
+                g0 = g1 = g2 = *color++;
+                b0 = b1 = b2 = *color++;
+            }
+            else
+            if(src_value != 0x7)
+            {
+// source bit mask to RGB
+                if((src_value & 0x1))
+                {
+                    r0 = g0 = b0 = 0xff;
+                }
+
+                if((src_value & 0x2))
+                {
+                    r1 = g1 = b1 = 0xff;
+                }
+
+                if((src_value & 0x4))
+                {
+                    r2 = g2 = b2 = 0xff;
+                }
+            }
+            else
+// background layer
+            if((annotation_value & 0x0f))
+            {
+                uint8_t *color = &bottom_rgb888[(annotation_value & 0x0f) * 3];
+                r0 = r1 = r2 = *color++;
+                g0 = g1 = g2 = *color++;
+                b0 = b1 = b2 = *color++;
+            }
+            else
+// white
+            {
+                r0 = r1 = r2 = 0xff;
+                g0 = g1 = g2 = 0xff;
+                b0 = b1 = b2 = 0xff;
+            }
+
+            for(int k = 0; k < 3; k++)
+            {
+                dst_row0[0] = r0;
+                dst_row0[1] = g0;
+                dst_row0[2] = b0;
+                dst_row0 += 3;
+                dst_row1[0] = r1;
+                dst_row1[1] = g1;
+                dst_row1[2] = b1;
+                dst_row1 += 3;
+                dst_row2[0] = r2;
+                dst_row2[1] = g2;
+                dst_row2[2] = b2;
+                dst_row2 += 3;
+            }
+        }
+    }
+
+    
+    
+    char path[BCTEXTLEN];
+    sprintf(path, "%s%02d.png", export_path, number);
+    if(dst->write_png(path, 9)) 
+    {
+        printf("MWindow::export_page %d: error writing %s\n", __LINE__, path);
+        return 1;
+    }
+    delete dst;
+    printf("MWindow::export_page %d: exported %s\n", __LINE__, path);
+
+    return 0;
+}
+
 void MWindow::toggle_zoom()
 {
     if(zoom_factor == 1)
