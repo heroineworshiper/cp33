@@ -1,0 +1,73 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Full Screen Image</title>
+</head>
+<body>
+    <CENTER>
+    <img id="fullScreenImage" alt="Full Screen Image">
+    </CENTER>
+
+    <script>
+    
+    const image_prefix = "test"
+    var current_image = 0
+    const img = document.getElementById('fullScreenImage');
+    
+    function loadImage()
+    {
+        var text = current_image.toString().padStart(2, '0')
+        var path = image_prefix + text + ".png"
+        console.log("loading " + path)
+        img.src = path
+        resizeImage()
+    }
+    
+    function resizeImage() {
+// assume height needs to match the window
+        scale = img.naturalHeight / window.innerHeight
+        console.log("img.naturalHeight=" + img.naturalHeight +
+            " img.naturalWidth=" + img.naturalWidth +
+            " scale=" + scale);
+        img.style.width = (img.naturalWidth / scale) + 'px';
+        img.style.height = (img.naturalHeight / scale) + 'px';
+    }
+    
+    function nextPage()
+    {
+        current_image++
+        loadImage()
+    }
+    
+    
+    function prevPage()
+    {
+        if(current_image > 0)
+            current_image--
+        loadImage()
+    }
+    
+
+    window.addEventListener('resize', resizeImage);
+    window.addEventListener('load', loadImage());
+
+    document.addEventListener('mousedown', function(event) {
+      // Get the window width
+      const windowWidth = window.innerWidth;
+      
+      // Check if the mouse is on the right side of the window (e.g., right half)
+      if (event.clientX > windowWidth / 2) {
+        // Check if the left mouse button (button 0) was pressed
+        if (event.button === 0) {
+          nextPage()
+        }
+      }
+      else
+      {
+        prevPage()
+      }
+    });
+    </script>
+</body>
+</html>

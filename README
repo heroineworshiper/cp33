@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 This program adds outboard metronome, reverb, & recording to a dumb
 electric piano with I2S audio exposed somewhere.
+Instructions for building are in cp33.c & piano.c
 
 
 What you'll find here:
@@ -31,20 +32,34 @@ cp33.pcb: I2S capture board
 
 recordcp33.c: Original linux program that converted USB output to a sound file.
 
+pdftoreader.c: obsolete sheet music converter
+pdftoreader2.c: Convert sheet music to compressed reader files.
+
+reader.conf: example configuration file for pdftoreader2
+
+
+reader_server.sh
+reader_client.sh
+piano.sh: wrapper scripts for running the programs on startup
+
+
 piano.c, pianoserver.c, piano.h: the executable for the realtime audio processor
 
 index.html, metro.wav favicon.ico record.png stop.png single.gif: assets for the GUI
 
-wifi.py: useful script for bringing up wifi
+wifi.py: useful script for manetaining a wifi station
 
-Instructions for building are in cp33.c & piano.c
+elan.X: firmware for reading an Elon/Synaptics touchpad & exposing a USB HID device
+
+touchpad.pcb: electronicals for the reader touchpad
+
 
 
 
 
 reader.c:
 Music display for dual raspberry pi's
------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 This requires configuring Xorg on the raspberry pi.
 
 Set up the framebuffer in /boot/config.txt by adding the following lines
@@ -132,9 +147,10 @@ client needs to mount it over NFS.
 
 
 Run it on the client 1st:
+mount /reader
 Xorg&
 export DISPLAY=:0
-nohup ./reader -c >& /dev/null
+nohup ./reader -c >& /dev/null&
 
 Run it on the server 2nd:
 xinit /usr/bin/fvwm2&
@@ -142,8 +158,13 @@ export DISPLAY=:0
 xinput
 xinput --list-props "McLionhead Trackpad"
 xinput --set-prop "McLionhead Trackpad" "libinput Accel Speed" 0
-nohup ./reader >& /dev/null
+nohup ./reader >& /dev/null&
 
+
+The server uses page turning buttons connected to GPIO 13, GPIO 14, GND
+on the pi B.  The pin numbering is pins 21, 23, 25.  The GPIO numbers
+changed on later pi's so there are no more pictures showing the original
+GPIO numbers.
 
 
 
@@ -156,8 +177,9 @@ lcd.FCStd: LCD stand
         shorter nuts for latches
 
 
-
-
+phone.FCStd: phone holder
+    print with .4mm nozzle
+    stick pad on with double sided tape
 
 
 

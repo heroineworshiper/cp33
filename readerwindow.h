@@ -40,6 +40,7 @@ public:
         int x2,
         int y2,
         int lock_it);
+    int export_page(const char *export_path, int number);
 
     int keypress_event();
     int button_release_event();

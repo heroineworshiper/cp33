@@ -1,7 +1,7 @@
 /*
  * Piano audio processor
  *
- * Copyright (C) 2021 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2021-2024 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -57,7 +57,17 @@
 #include "piano.h"
 
 
+// swap playback channels to preserve headphone cable
+#define SWAP_PLAYBACK
+#ifdef SWAP_PLAYBACK
+    #define LEFT 1
+    #define RIGHT 0
+#else
+    #define LEFT 0
+    #define RIGHT 1
+#endif
 #define CHANNELS 2
+#define SAMPLERATE 44100
 #define BITS_PER_SAMPLE 24
 #define SAMPLESIZE (CHANNELS * BITS_PER_SAMPLE / 8)
 #define PAGE_SIZE 4096
@@ -67,7 +77,7 @@
 #define EP1_SIZE 0x40
 #define PLAYBACK_BUFFER 0x100000
 // multiple of SAMPLESIZE.  30 minute buffer
-#define RECORD_BUFFER (SAMPLESIZE * 44100 * 60 * 30)
+#define RECORD_BUFFER (SAMPLESIZE * SAMPLERATE * 60 * 30)
 // number of bytes to send from the CP33 at a time.  Limited by settings.h
 #define I2S_FRAGMENT_SIZE (64 * CHANNELS * sizeof(int))
 
@@ -76,25 +86,29 @@
 
 // reverb
 int do_reverb = 0;
-// in samples
+// in samples including reverb_delay1
 int reverb_len = SAMPLERATE;
 int reverb_refs = 150;
 // DEBUG
 //int reverb_refs = 1;
-// ms delay before 1st reflection in addition to the FFT delay
-int reverb_delay1 = 20;
+// sample delay before 1st reflection in addition to the FFT delay
+int reverb_delay1 = 20 * SAMPLERATE / 1000;
 // 1st reflection level in DB
 float reverb_level1 = -24.0f;
 // DEBUG
 //float reverb_level1 = 0.0f;
 // last reflection level in DB
-float reverb_level2 = -46.0f;
+float reverb_level2 = -50.0f;
 // lowpass cutoff in HZ
 int reverb_lowpass = 6000;
+// highpass cutoff in HZ
+int reverb_highpass = 164;
 
 float *reverb_bufs[CHANNELS];
 int *reverb_channels[CHANNELS];
+// reflection delays in samples
 int *reverb_offsets[CHANNELS];
+// reflection level in linear fractions
 float *reverb_levels[CHANNELS];
 
 #define FFT_WINDOW 2048
@@ -141,13 +155,14 @@ int preset1 = 60;
 int preset2 = 60;
 int preset3 = 60;
 int preset4 = 60;
+int preset5 = 60;
 // 0 - 100
 int metronome_level = 25;
 int metro_offset = 0;
 extern int _binary_metro_wav_start;
 extern int _binary_metro_wav_size;
-const int metro_wav_size = (int)&_binary_metro_wav_size - HEADER_SIZE;
-const uint8_t *metro_wav_start = ((uint8_t*)&_binary_metro_wav_start) + HEADER_SIZE;
+int metro_wav_size = 0;
+uint8_t *metro_wav_start = 0;
 
 
 
@@ -541,6 +556,11 @@ void do_filter(int16_t *alsa_ptr0)
                 ((float)SAMPLERATE / 2 / HALF_WINDOW));
             bzero(fft_output_r[channel] + cutoff, sizeof(float) * (FFT_WINDOW / 2 - cutoff + 1));
             bzero(fft_output_i[channel] + cutoff, sizeof(float) * (FFT_WINDOW / 2 - cutoff + 1));
+// highpass
+            cutoff = (int)(reverb_highpass / 
+                ((float)SAMPLERATE / 2 / HALF_WINDOW));
+            bzero(fft_output_r[channel], sizeof(float) * (cutoff + 1));
+            bzero(fft_output_i[channel], sizeof(float) * (cutoff + 1));
 
             symmetry(fft_output_r[channel], fft_output_i[channel]);
 
@@ -1096,9 +1116,10 @@ void* playback_thread(void *ptr)
                 int32_t *in_ptr2 = in_ptr + 2;
                 for(i = 0; i < FRAGMENT; i++)
                 {
-                    out_ptr[1] = (((*in_ptr++) >> 16) * (FRAGMENT - i) +
+// swap channels for monitoring
+                    out_ptr[RIGHT] = (((*in_ptr++) >> 16) * (FRAGMENT - i) +
                         ((*in_ptr2++) >> 16) * i) / FRAGMENT;
-                    out_ptr[0] = (((*in_ptr++) >> 16) * (FRAGMENT - i) +
+                    out_ptr[LEFT] = (((*in_ptr++) >> 16) * (FRAGMENT - i) +
                         ((*in_ptr2++) >> 16) * i) / FRAGMENT;
                     out_ptr += 2;
                     if(in_ptr >= fifo_end)
@@ -1121,8 +1142,8 @@ void* playback_thread(void *ptr)
                 for(i = 0; i < FRAGMENT; i++)
 		        {
 // swap channels for monitoring
-                    out_ptr[1] = (*in_ptr++) >> 16;
-                    out_ptr[0] = (*in_ptr++) >> 16;
+                    out_ptr[RIGHT] = (*in_ptr++) >> 16;
+                    out_ptr[LEFT] = (*in_ptr++) >> 16;
                     out_ptr += 2;
                     if(in_ptr >= fifo_end)
                     {
@@ -1304,15 +1325,13 @@ void* playback_thread(void *ptr)
     }
 }
 
+// open USB input
 int open_usb()
 {
     int result = 0;
     int i;
     if(usb_disconnected)
     {
-    // open USB input
-	    libusb_init(0);
-
 	    devh = libusb_open_device_with_vid_pid(0, 0x04d8, 0x000b);
 	    if(!devh)
 	    {
@@ -1381,44 +1400,51 @@ void calculate_dir()
         sprintf(string, "ls -al %s*.wav", WAV_PATH);
         FILE *fd = popen(string, "r");
         
-        while(!feof(fd))
+        if(fd)
         {
-            char *result = fgets(string, TEXTLEN, fd);
-            if(!result)
+            while(!feof(fd))
             {
-                break;
-            }
-
-// get filename
-            char *ptr = strchr(string, '/');
-// get 1st numeric char
-            if(ptr)
-            {
-                char *ptr2 = ptr;
-                ptr++;
-                while(*ptr && (*ptr < '0' || *ptr > '9'))
+                char *result = fgets(string, TEXTLEN, fd);
+                if(!result)
                 {
-                    ptr++;
+                    break;
                 }
-                
+
+    // get filename
+                char *ptr = strchr(string, '/');
+    // get 1st numeric char
                 if(ptr)
                 {
-                    int current = atoi(ptr);
-                    if(current > highest)
+                    char *ptr2 = ptr;
+                    ptr++;
+                    while(*ptr && (*ptr < '0' || *ptr > '9'))
                     {
-                        highest = current;
-                        strcpy(highest_filename, ptr2);
-// strip linefeed
-                        while(strlen(highest_filename) > 0 &&
-                            highest_filename[strlen(highest_filename) - 1] == '\n')
+                        ptr++;
+                    }
+
+                    if(ptr)
+                    {
+                        int current = atoi(ptr);
+                        if(current > highest)
                         {
-                            highest_filename[strlen(highest_filename) - 1] = 0;
+                            highest = current;
+                            strcpy(highest_filename, ptr2);
+    // strip linefeed
+                            while(strlen(highest_filename) > 0 &&
+                                highest_filename[strlen(highest_filename) - 1] == '\n')
+                            {
+                                highest_filename[strlen(highest_filename) - 1] = 0;
+                            }
                         }
                     }
                 }
             }
+		    fclose(fd);
         }
-		fclose(fd);
+        else
+        {
+            printf("calculate_dir %d: %s\n", __LINE__, strerror(errno));
+        }
 
         if(highest >= 0)
         {
@@ -1452,30 +1478,38 @@ void calculate_dir()
 int64_t calculate_remane()
 {
 	FILE *fd = popen("df /", "r");
-	char buffer[TEXTLEN];
-	fgets(buffer, TEXTLEN, fd);
-	fgets(buffer, TEXTLEN, fd);
-    fclose(fd);
+    if(fd)
+    {
+	    char buffer[TEXTLEN];
+	    fgets(buffer, TEXTLEN, fd);
+	    fgets(buffer, TEXTLEN, fd);
+        fclose(fd);
+	    char *ptr = buffer;
+	    int i;
+	    for(i = 0; i < 3; i++)
+	    {
+		    while(*ptr != 0 && *ptr != ' ')
+		    {
+			    ptr++;
+		    }
 
-	char *ptr = buffer;
-	int i;
-	for(i = 0; i < 3; i++)
-	{
-		while(*ptr != 0 && *ptr != ' ')
-		{
-			ptr++;
-		}
+		    while(*ptr != 0 && *ptr == ' ')
+		    {
+			    ptr++;
+		    }
+	    }
 
-		while(*ptr != 0 && *ptr == ' ')
-		{
-			ptr++;
-		}
-	}
+	    int64_t remane = atol(ptr);
+    //printf("calculate_remane %d remane=%lld\n", __LINE__, remane);
+	    remane = remane * 1024LL / SAMPLESIZE;
+        return remane;
+    }
+    else
+    {
+        printf("calculate_remane %d: %s\n", __LINE__, strerror(errno));
+        return 0;
+    }
 
-	int64_t remane = atol(ptr);
-//printf("calculate_remane %d remane=%lld\n", __LINE__, remane);
-	remane = remane * 1024LL / SAMPLESIZE;
-    return remane;
 }
 
 
@@ -1619,6 +1653,14 @@ void stop_recording()
     }
 }
 
+int parse_hex1(char *ptr)
+{
+    if(*ptr == '0') 
+        return 0;
+    else
+        return 1;
+}
+
 int parse_hex2(char *ptr)
 {
     const char hex_table[] = { '0', '1', '2', '3', '4', '5', '6', '7', 
@@ -1645,9 +1687,10 @@ int parse_hex2(char *ptr)
     return result;
 }
 
-void handle_input(char *state)
+int handle_input(char *state, int version)
 {
 printf("handle_input %d state=%s\n", __LINE__, state);
+    char *start = state;
     if(strlen(state) > 1)
     {
         int need_defaults = 0;
@@ -1659,39 +1702,81 @@ printf("handle_input %d state=%s\n", __LINE__, state);
         uint8_t user_preset2;
         uint8_t user_preset3;
         uint8_t user_preset4;
+        uint8_t user_preset5;
         uint8_t user_metronome;
         uint8_t user_reverb;
         uint8_t user_record;
 
-        user_volume = parse_hex2(state);
-        state += 2;
-        user_mvolume = parse_hex2(state);
-        state += 2;
-        user_lvolume = parse_hex2(state);
-        state += 2;
-        user_bpm = parse_hex2(state);
-        CLAMP(user_bpm, 30, 200);
-        state += 2;
-        user_metronome = parse_hex2(state);
-        state += 2;
-        user_reverb = parse_hex2(state);
-        state += 2;
-        user_record = parse_hex2(state);
-        state += 2;
-        user_preset1 = parse_hex2(state);
-        CLAMP(user_preset1, 30, 200);
-        state += 2;
-        user_preset2 = parse_hex2(state);
-        CLAMP(user_preset2, 30, 200);
-        state += 2;
-        user_preset3 = parse_hex2(state);
-        CLAMP(user_preset3, 30, 200);
-        state += 2;
-        user_preset4 = parse_hex2(state);
-        CLAMP(user_preset4, 30, 200);
-        state += 2;
+#define MIN_BPM 30
+#define MAX_BPM 200
+        if(version == 0)
+        {
+            user_volume = parse_hex2(state);
+            state += 2;
+            user_mvolume = parse_hex2(state);
+            state += 2;
+            user_lvolume = parse_hex2(state);
+            state += 2;
+            user_bpm = parse_hex2(state);
+            CLAMP(user_bpm, MIN_BPM, MAX_BPM);
+            state += 2;
+            user_metronome = parse_hex2(state);
+            state += 2;
+            user_reverb = parse_hex2(state);
+            state += 2;
+            user_record = parse_hex2(state);
+            state += 2;
+            user_preset1 = parse_hex2(state);
+            CLAMP(user_preset1, MIN_BPM, MAX_BPM);
+            state += 2;
+            user_preset2 = parse_hex2(state);
+            CLAMP(user_preset2, MIN_BPM, MAX_BPM);
+            state += 2;
+            user_preset3 = parse_hex2(state);
+            CLAMP(user_preset3, MIN_BPM, MAX_BPM);
+            state += 2;
+            user_preset4 = parse_hex2(state);
+            CLAMP(user_preset4, MIN_BPM, MAX_BPM);
+            state += 2;
+        }
+        else
+        {
+            user_volume = parse_hex2(state);
+            state += 2;
+            user_mvolume = parse_hex2(state);
+            state += 2;
+            user_lvolume = parse_hex2(state);
+            state += 2;
 
-printf("handle_input %d volume=%d mvolume=%d line=%d bpm=%d metronome=%d reverb=%d record=%d preset1=%d preset2=%d preset3=%d preset4=%d\n", 
+            user_bpm = parse_hex2(state);
+            CLAMP(user_bpm, MIN_BPM, MAX_BPM);
+            state += 2;
+
+            user_metronome = parse_hex1(state);
+            state += 1;
+            user_reverb = parse_hex1(state);
+            state += 1;
+            user_record = parse_hex1(state);
+            state += 1;
+
+            user_preset1 = parse_hex2(state);
+            CLAMP(user_preset1, MIN_BPM, MAX_BPM);
+            state += 2;
+            user_preset2 = parse_hex2(state);
+            CLAMP(user_preset2, MIN_BPM, MAX_BPM);
+            state += 2;
+            user_preset3 = parse_hex2(state);
+            CLAMP(user_preset3, MIN_BPM, MAX_BPM);
+            state += 2;
+            user_preset4 = parse_hex2(state);
+            CLAMP(user_preset4, MIN_BPM, MAX_BPM);
+            state += 2;
+            user_preset5 = parse_hex2(state);
+            CLAMP(user_preset5, MIN_BPM, MAX_BPM);
+            state += 2;
+        }
+
+printf("handle_input %d volume=%d mvolume=%d line=%d bpm=%d metronome=%d reverb=%d record=%d presets=%d,%d,%d,%d,%d\n", 
 __LINE__, 
 user_volume,
 user_mvolume,
@@ -1703,7 +1788,8 @@ user_record,
 user_preset1,
 user_preset2,
 user_preset3,
-user_preset4);
+user_preset4,
+user_preset5);
 
 
         if(speaker_volume != user_volume)
@@ -1736,6 +1822,7 @@ user_preset4);
             preset2 != user_preset2 ||
             preset3 != user_preset3 ||
             preset4 != user_preset4 ||
+            preset5 != user_preset5 ||
             metronome_level != user_mvolume ||
             bpm != user_bpm ||
             do_reverb != user_reverb)
@@ -1745,6 +1832,7 @@ user_preset4);
             preset2 = user_preset2;
             preset3 = user_preset3;
             preset4 = user_preset4;
+            preset5 = user_preset5;
             metronome_level = user_mvolume;
             bpm = user_bpm;
             do_reverb = user_reverb;
@@ -1765,28 +1853,55 @@ user_preset4);
             save_settings();
         }
     }
+    return state - start;
 }
 
 // fill response to GUI
-void handle_update(char *state)
+void handle_update(char *state, int version)
 {
 //printf("handle_update %d total_written=%lld\n", __LINE__, total_written);
-	sprintf(state, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%08x%08x%08x%s", 
-        speaker_volume,
-        metronome_level,
-        line_volume,
-        bpm,
-        do_metronome,
-        do_reverb,
-        recording,
-        preset1,
-        preset2,
-        preset3,
-        preset4,
-		(uint32_t)(total_written / SAMPLERATE), 
-		(uint32_t)(total_remane / SAMPLERATE), 
-        glitches,
-		filename);
+    if(version == 0)
+    {
+	    sprintf(state, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%08x%08x%08x%s", 
+            speaker_volume,
+            metronome_level,
+            line_volume,
+            bpm,
+            do_metronome,
+            do_reverb,
+            recording,
+            preset1,
+            preset2,
+            preset3,
+            preset4,
+		    (uint32_t)(total_written / SAMPLERATE), 
+		    (uint32_t)(total_remane / SAMPLERATE), 
+            glitches,
+		    filename);
+    }
+    else
+    {
+	    sprintf(state, "%02x%02x%02x%02x%01x%01x%01x%02x%02x%02x%02x%02x%08x%08x%08x%s", 
+            speaker_volume,
+            metronome_level,
+            line_volume,
+            bpm,
+
+            do_metronome,
+            do_reverb,
+            recording,
+
+            preset1,
+            preset2,
+            preset3,
+            preset4,
+            preset5,
+
+		    (uint32_t)(total_written / SAMPLERATE), 
+		    (uint32_t)(total_remane / SAMPLERATE), 
+            glitches,
+		    filename);
+    }
 }
 
 float from_db(float db)
@@ -1797,6 +1912,14 @@ float from_db(float db)
 void init_reverb()
 {
     int i, j;
+    if(reverb_delay1 <= reverb_len)
+    {
+        printf("init_reverb %d: reverb_delay1 %d must be less than reverb_len %d\n",
+            __LINE__,
+            reverb_delay1,
+            reverb_len);
+    }
+
     for(i = 0; i < CHANNELS; i++)
     {
         reverb_bufs[i] = calloc(sizeof(float), reverb_len + FRAGMENT);
@@ -1807,6 +1930,12 @@ void init_reverb()
         reverb_channels[i][0] = i;
         reverb_offsets[i][0] = reverb_delay1;
         reverb_levels[i][0] = from_db(reverb_level1);
+// printf("init_reverb %d i=%d j=%d delay=%d level=%f\n", 
+// __LINE__, 
+// i, 
+// 0, 
+// reverb_offsets[i][0], 
+// reverb_levels[i][0]);
         for(j = 1; j < reverb_refs; j++)
         {
             reverb_channels[i][j] = rand() % CHANNELS;
@@ -1815,7 +1944,12 @@ void init_reverb()
                 (rand() % (reverb_len - reverb_delay1) / reverb_refs);
             reverb_levels[i][j] = from_db(reverb_level1 + 
                 (reverb_level2 - reverb_level1) * j / reverb_refs);
-//printf("init_reverb %d i=%d j=%d level=%f\n", __LINE__, i, j, reverb_levels[i][j]);
+// printf("init_reverb %d i=%d j=%d delay=%d level=%f\n", 
+// __LINE__, 
+// i, 
+// j, 
+// reverb_offsets[i][j], 
+// reverb_levels[i][j]);
         }
         
         fft_dissolved[i] = calloc(sizeof(float), FFT_WINDOW);
@@ -1888,6 +2022,10 @@ void save_settings()
 int main(int argc, char *argv[])
 {
     int result, i;
+    metro_wav_size = (int)&_binary_metro_wav_size - HEADER_SIZE;
+    metro_wav_start = ((uint8_t*)&_binary_metro_wav_start) + HEADER_SIZE;
+
+
     load_settings();
 
 
@@ -1986,6 +2124,8 @@ int main(int argc, char *argv[])
     }
 	pthread_create(&tid, &attr, playback_thread, 0);
 
+// libusb_init leaks if repeated
+    libusb_init(0);
     if(open_usb())
     {
         printf("main %d: instrument disconnected\n", __LINE__);
