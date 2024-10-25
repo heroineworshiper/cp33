@@ -871,12 +871,40 @@ int MWindow::cursor_motion_event()
 //printf("MWindow::cursor_motion_event %d %d %d\n", __LINE__, xdiff, ydiff);
             drag_accum_x += xdiff;
             drag_accum_y += ydiff;
+// rewind cursor back to the same point
             reposition_cursor(drag_x, drag_y);
+
 
             int new_zoom_x = drag_zoom_x + drag_accum_x;
             int new_zoom_y = drag_zoom_y + drag_accum_y;
-            CLAMP(new_zoom_x, 0, root_w - root_w / 3);
-            CLAMP(new_zoom_y, 0, root_h - root_h / 3);
+
+// clamp accumulators & window position
+            if(new_zoom_x < 0)
+            {
+                int diff = -new_zoom_x;
+                drag_accum_x += diff;
+                new_zoom_x = 0;
+            }
+            if(new_zoom_y < 0)
+            {
+                int diff = -new_zoom_y;
+                drag_accum_y += diff;
+                new_zoom_y = 0;
+            }
+            if(new_zoom_x > root_w - root_w / 3)
+            {
+                int diff = new_zoom_x - (root_w - root_w / 3);
+                drag_accum_x -= diff;
+                new_zoom_x = root_w - root_w / 3;
+            }
+            if(new_zoom_y > root_h - root_h / 3)
+            {
+                int diff = new_zoom_y - (root_h - root_h / 3);
+                drag_accum_y -= diff;
+                new_zoom_y = root_h - root_h / 3;
+            }
+            
+            
             if(new_zoom_x != zoom_x ||
                 new_zoom_y != zoom_y)
             {

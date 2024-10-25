@@ -54,26 +54,8 @@ BC_Window* LoadFileThread::new_gui()
 	sprintf(default_path, READER_PATH);
 	MWindow::mwindow->defaults->get("DEFAULT_LOADPATH", default_path);
 
-//     int x = MWindow::mwindow->get_abs_cursor_x(1);
-//     int y = MWindow::mwindow->get_abs_cursor_y(1);
-// 
-//     if(x + MWindow::mwindow->get_resources()->filebox_w > MWindow::mwindow->root_w)
-//     {
-//         x = MWindow::mwindow->root_w - MWindow::mwindow->get_resources()->filebox_w;
-//     }
-//     if(y + MWindow::mwindow->get_resources()->filebox_h > MWindow::mwindow->root_h)
-//     {
-//         y = MWindow::mwindow->root_h - MWindow::mwindow->get_resources()->filebox_h;
-//     }
-//     if(x < 0)
-//     {
-//         x = 0;
-//     }
-//     if(y < 0)
-//     {
-//         y = 0;
-//     }
 
+// clamp the window size
     if(MWindow::mwindow->get_resources()->filebox_w > MWindow::mwindow->root_w)
     {
         MWindow::mwindow->get_resources()->filebox_w = MWindow::mwindow->root_w;
@@ -83,7 +65,31 @@ BC_Window* LoadFileThread::new_gui()
         MWindow::mwindow->get_resources()->filebox_h = MWindow::mwindow->root_h;
     }
 
-	gui = new LoadFileWindow(/* x, y,*/ 0, 0, default_path);
+
+    int x = MWindow::mwindow->get_abs_cursor_x(1) - 
+        MWindow::mwindow->get_resources()->filebox_w / 2;
+    int y = MWindow::mwindow->get_abs_cursor_y(1) - 
+        MWindow::mwindow->get_resources()->filebox_h / 2;
+
+    if(x + MWindow::mwindow->get_resources()->filebox_w > MWindow::mwindow->root_w)
+    {
+        x = MWindow::mwindow->root_w - MWindow::mwindow->get_resources()->filebox_w;
+    }
+    if(y + MWindow::mwindow->get_resources()->filebox_h > MWindow::mwindow->root_h)
+    {
+        y = MWindow::mwindow->root_h - MWindow::mwindow->get_resources()->filebox_h;
+    }
+    if(x < 0)
+    {
+        x = 0;
+    }
+    if(y < 0)
+    {
+        y = 0;
+    }
+
+
+	gui = new LoadFileWindow(x, y, default_path);
     gui->get_filters()->remove_all_objects();
     char string[BCTEXTLEN];
     sprintf(string, "*%s", READER_SUFFIX);
@@ -153,12 +159,14 @@ int PaletteButton::handle_event()
 }
 
 
-PaletteWindow::PaletteWindow(int x, 
+PaletteWindow::PaletteWindow(MenuWindow *gui,
+    int x, 
     int y, 
     int w, 
     int h, 
     BC_Pixmap *bg_pixmap)
- : BC_Popup(x,
+ : BC_Popup(gui,
+    x,
     y,
     w,
     h,
@@ -166,6 +174,7 @@ PaletteWindow::PaletteWindow(int x,
     1,
     bg_pixmap)
 {
+    this->gui = gui;
 }
 PaletteWindow::~PaletteWindow()
 {
@@ -694,7 +703,7 @@ void MenuWindow::create_objects()
     add_tool(top = new Top(x, y));
     add_tool(bottom = new Bottom(x, y));
 
-    x += top->get_w() + margin;
+    x += top->get_w();
     add_tool(top_color = new TopColor(x, y));
     add_tool(bottom_color = new BottomColor(x, y));
 
@@ -784,12 +793,13 @@ void MenuWindow::show_palette(int top)
 		        MWindow::mwindow->theme->get_image("palette_bg"),
 		        bg_pixmap);
         }
-        add_subwindow(PaletteWindow::palette_window = new PaletteWindow(
+        PaletteWindow::palette_window = new PaletteWindow(
+            this,
             x,
             y,
             w,
             h,
-            bg_pixmap));
+            bg_pixmap);
         PaletteWindow::palette_window->create_objects(top);
     }
 }
