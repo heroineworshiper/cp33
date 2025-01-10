@@ -2,6 +2,7 @@ OBJDIR := $(shell uname --machine)
 CC := g++
 CXXFLAGS := -O3 -Iguicast
 
+# windowed mode on x86
 ifeq ($(OBJDIR), x86_64)
 CXXFLAGS += -DUSE_WINDOW
 endif
@@ -40,6 +41,7 @@ OBJS := \
 
 LIBS := \
     guicast/$(OBJDIR)/libguicast.a \
+    guicast/$(OBJDIR)/libcmodel.a \
     -lX11 \
     -lXext \
     -lXv \

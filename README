@@ -118,6 +118,8 @@ apt install fvwm
 
 Copy /usr/share/fvwm/system.fvwm2rc from Ubuntu.
 Add a line to /usr/share/fvwm/system.fvwm2rc to disable the window border
+This allows us to have menus on top of a window without a border.
+The line must go after your global HandleWidth declarations
 
 Style "Reader" NoTitle, HandleWidth 0
 
@@ -150,7 +152,7 @@ Run it on the client 1st:
 mount /reader
 Xorg&
 export DISPLAY=:0
-nohup ./reader -c >& /dev/null&
+nohup ./reader -c 1234 1235>& /dev/null&
 
 Run it on the server 2nd:
 xinit /usr/bin/fvwm2&
@@ -158,7 +160,7 @@ export DISPLAY=:0
 xinput
 xinput --list-props "McLionhead Trackpad"
 xinput --set-prop "McLionhead Trackpad" "libinput Accel Speed" 0
-nohup ./reader >& /dev/null&
+nohup ./reader pi2:1234 1235>& /dev/null&
 
 
 The server uses page turning buttons connected to GPIO 13, GPIO 14, GND

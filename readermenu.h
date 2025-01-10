@@ -26,7 +26,8 @@
 
 
 
-
+class PaletteWindow;
+class MenuWindow;
 
 class LoadFileWindow : public BC_FileBox
 {
@@ -63,7 +64,8 @@ public:
 class PaletteWindow : public BC_Popup
 {
 public:
-	PaletteWindow(int x, 
+	PaletteWindow(MenuWindow *gui,
+        int x, 
         int y, 
         int w, 
         int h, 
@@ -75,6 +77,7 @@ public:
     int cursor_motion_event();
     
     static PaletteWindow *palette_window;
+    MenuWindow *gui;
 };
 
 

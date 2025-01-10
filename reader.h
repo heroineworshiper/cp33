@@ -29,12 +29,17 @@
 
 
 // enable 2 page mode using the client
-#ifndef USE_WINDOW
+//#ifndef USE_WINDOW
 #define TWO_PAGE
-#endif // USE_WINDOW
+//#endif // USE_WINDOW
 
-#define ROOT_W 768
-#define ROOT_H 1366
+// 2 pages on 1 monitor
+#define ONE_SCREEN
+
+//#define ROOT_W 768
+//#define ROOT_H 1366
+#define ROOT_W 1080
+#define ROOT_H 1920
 
 // where files are stored
 #define READER_PATH "/reader/"
@@ -47,8 +52,8 @@
 // use double buffering
 #define BG_PIXMAP
 
-#define CLIENT_ADDRESS "pi2"
-#define CLIENT_PORT 1234
+//#define CLIENT_ADDRESS "pi2"
+//#define CLIENT_PORT 1234
 #define PACKET_SIZE 1024
 // timeout in ms
 //#define TIMEOUT 1000

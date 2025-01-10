@@ -25,11 +25,12 @@
 
 // step 2: run this program as a controller
 // export DISPLAY=:0
-// ./reader
+// ./reader [client address:port] [server port]
 
 // run this program as a client
-// ./reader -c
+// ./reader -c <client port> <server port>
 
+// OBSOLETE
 // export an image for each page with names output01.png, output02.png...
 // Edit reader.html & load in a browser to view the images.
 // ./reader <input> -e <output>
@@ -81,10 +82,19 @@ typedef struct
 button_state_t up_button;
 button_state_t down_button;
 
-// network
+// received command
 uint8_t packet[PACKET_SIZE];
+
+// next commandto send
 uint8_t command[PACKET_SIZE];
+int command_counter = 0;
 int command_size;
+
+// command currently being sent
+uint8_t command2[PACKET_SIZE];
+int command_size2;
+int command_counter2 = 0;
+
 int command_result;
 sem_t command_ready;
 sem_t command_done;
@@ -104,6 +114,9 @@ char reader_path[BCTEXTLEN];
 int file_changed = 0;
 int current_page = 0;
 
+char client_address[BCTEXTLEN];
+int client_port;
+int server_port;
 
 Page::Page()
 {
@@ -305,7 +318,7 @@ void* client_thread(void *ptr)
 	int read_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	struct sockaddr_in read_addr;
 	read_addr.sin_family = AF_INET;
-	read_addr.sin_port = htons((unsigned short)CLIENT_PORT);
+	read_addr.sin_port = htons((unsigned short)client_port);
 	read_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
 	if(bind(read_socket, 
@@ -346,7 +359,7 @@ void* client_thread(void *ptr)
         int write_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
         struct sockaddr_in write_addr;
         write_addr.sin_family = AF_INET;
-        write_addr.sin_port = htons((unsigned short)CLIENT_PORT);
+        write_addr.sin_port = htons((unsigned short)server_port);
         write_addr.sin_addr.s_addr = peer_addr.sin_addr.s_addr;
         
         if(connect(write_socket, 
@@ -399,7 +412,7 @@ void* server_thread(void *ptr)
     int read_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     struct sockaddr_in read_addr;
     read_addr.sin_family = AF_INET;
-    read_addr.sin_port = htons((unsigned short)CLIENT_PORT);
+    read_addr.sin_port = htons((unsigned short)server_port);
     read_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	if(bind(read_socket, 
 		(struct sockaddr*)&read_addr, 
@@ -413,15 +426,15 @@ void* server_thread(void *ptr)
 	struct sockaddr_in write_addr;
 	struct hostent *hostinfo;
 	write_addr.sin_family = AF_INET;
-	write_addr.sin_port = htons((unsigned short)CLIENT_PORT);
-    hostinfo = gethostbyname(CLIENT_ADDRESS);
+	write_addr.sin_port = htons((unsigned short)client_port);
+    hostinfo = gethostbyname(client_address);
 
 	if(hostinfo == NULL)
     {
     	fprintf (stderr, 
             "server_thread %d: unknown host %s.\n", 
             __LINE__, 
-            CLIENT_ADDRESS);
+            client_address);
     	exit(1);
     }
 
@@ -497,6 +510,7 @@ void* server_thread(void *ptr)
 int send_command(int id, uint8_t *value, int value_size)
 {
     command[0] = id;
+//    command[1] = command_counter++;
     memcpy(command + 1, value, value_size);
     command_size = 1 + value_size;
     command_result = -1;
@@ -786,7 +800,10 @@ int main(int argc, char *argv[])
 	pthread_attr_t  attr;
 	pthread_attr_init(&attr);
 
-    const char *path = 0;
+//    const char *path = 0;
+    client_address[0] = 0;
+    client_port = -1;
+    server_port = -1;
 
 // load the image file
     if(argc > 1)
@@ -797,25 +814,72 @@ int main(int argc, char *argv[])
             {
 // start in client mode without loading a file
                 client_mode = 1;
-            }
-            else
-            if(!strcmp(argv[i], "-e"))
-            {
-                i++;
                 if(i >= argc)
                 {
-                    printf("-e needs a filename\n");
+                    printf("-c needs a client port\n");
                     exit(1);
                 }
                 else
                 {
-                    export_path = argv[i];
+                    i++;
+                    client_port = atoi(argv[i]);
+                }
+                
+                if(i >= argc)
+                {
+                    printf("-c needs a server port\n");
+                    exit(1);
+                }
+                else
+                {
+                    i++;
+                    server_port = atoi(argv[i]);
                 }
             }
             else
             {
-                path = argv[i];
+// enter server mode
+// split the client address
+#ifdef TWO_PAGE
+                if(client_address[0] == 0)
+                {
+                    char *ptr = strchr(argv[i], ':');
+                    if(ptr)
+                    {
+                        strcpy(client_address, argv[i]);
+                        client_port = atoi(ptr + 1);
+                        ptr = strchr(client_address, ':');
+                        *ptr = 0;
+                    }
+                    else
+                    {
+                        printf("Need a client & port of the form address:port\n");
+                        exit(1);
+                    }
+                }
+                else
+                {
+                    server_port = atoi(argv[i]);
+                }
+#endif // TWO_PAGE
             }
+//             if(!strcmp(argv[i], "-e"))
+//             {
+//                 i++;
+//                 if(i >= argc)
+//                 {
+//                     printf("-e needs a filename\n");
+//                     exit(1);
+//                 }
+//                 else
+//                 {
+//                     export_path = argv[i];
+//                 }
+//             }
+//             else
+//             {
+//                 path = argv[i];
+//             }
         }
     }
 
@@ -827,17 +891,23 @@ int main(int argc, char *argv[])
     MWindow::mwindow = new MWindow;
     MWindow::mwindow->create_objects();
 
-    if(!client_mode)
+    if(!client_mode && client_address[0])
     {
+        if(server_port < 0)
+        {
+            printf("Server port not specified\n");
+            exit(1);
+        }
+
         printf("Starting network server\n");
         sem_init(&command_ready, 0, 0);
         sem_init(&command_done, 0, 0);
         pthread_create(&tid, &attr, server_thread, 0);
 
-        if(path)
-        {
-            load_file_entry(path);
-        }
+//         if(path)
+//         {
+//             load_file_entry(path);
+//         }
 
 // enable the GPIOs
 #ifndef USE_WINDOW
@@ -850,6 +920,7 @@ int main(int argc, char *argv[])
 #endif // !USE_WINDOW
     }
     else
+    if(client_mode)
 // start the client
     {
         printf("Starting network client\n");

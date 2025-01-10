@@ -159,12 +159,14 @@ int PaletteButton::handle_event()
 }
 
 
-PaletteWindow::PaletteWindow(int x, 
+PaletteWindow::PaletteWindow(MenuWindow *gui,
+    int x, 
     int y, 
     int w, 
     int h, 
     BC_Pixmap *bg_pixmap)
- : BC_Popup(x,
+ : BC_Popup(gui,
+    x,
     y,
     w,
     h,
@@ -172,6 +174,7 @@ PaletteWindow::PaletteWindow(int x,
     1,
     bg_pixmap)
 {
+    this->gui = gui;
 }
 PaletteWindow::~PaletteWindow()
 {
@@ -790,12 +793,13 @@ void MenuWindow::show_palette(int top)
 		        MWindow::mwindow->theme->get_image("palette_bg"),
 		        bg_pixmap);
         }
-        add_subwindow(PaletteWindow::palette_window = new PaletteWindow(
+        PaletteWindow::palette_window = new PaletteWindow(
+            this,
             x,
             y,
             w,
             h,
-            bg_pixmap));
+            bg_pixmap);
         PaletteWindow::palette_window->create_objects(top);
     }
 }

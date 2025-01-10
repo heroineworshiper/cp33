@@ -1,6 +1,6 @@
 /*
  * MUSIC READER
- * Copyright (C) 2021-2023 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2021-2024 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,6 +38,10 @@
 
 #define DISPLAY_W 768
 #define DISPLAY_H 1366
+
+//#define DISPLAY_W 1080
+//#define DISPLAY_H 1920
+
 #define TEXTLEN 1024
 #define DPI 300
 // default greyscale value for white
@@ -351,6 +355,8 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+
+    printf("DISPLAY_W=%d DISPLAY_H=%d\n", DISPLAY_W, DISPLAY_H);
     char string[TEXTLEN];
     FILE *config_fd = fopen(argv[1], "r");
     if(!config_fd)

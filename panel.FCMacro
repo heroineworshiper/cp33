@@ -1,0 +1,20 @@
+import libisogrid
+import importlib
+importlib.reload(libisogrid)
+import math
+
+BORDER = 1.0
+
+extrudeTris, extrudeSubs = libisogrid.makeGrid(140.0, 
+    150.0, 
+    x_slices=5,
+    y_slices=5,
+    x_borders=[ BORDER, BORDER ],
+    y_borders=[ BORDER, BORDER ],
+    subdivision_thickness=0,
+    subdivision_w=0,
+    triangle_thickness=5,
+    triangle_w=BORDER)
+extrudeTris.Placement = App.Placement(
+    App.Vector(-20, -130, -24.3),
+    App.Rotation(App.Vector(0, 0, 1), 0))

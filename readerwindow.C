@@ -70,6 +70,7 @@ MWindow::MWindow() : BC_Window()
     zoom_y = 0;
     zoom_factor = 1;
 
+// border must be disabled in FVWM
 //#ifndef USE_WINDOW
 //    set_border(0);
 //#endif
@@ -119,8 +120,11 @@ void MWindow::create_objects()
 //printf("MWindow::create_objects %d %f\n", __LINE__, oval_table[i]);
     }
 
+    int x = 0;
+// hack to get it to draw 2 pages on a single screen
+    if(ROOT_W == 1080 && client_mode) x = 1080;
     create_window("Reader", // title
-        0, // x
+        x, // x
         0, // y
         ROOT_W, // w
         ROOT_H, // h
@@ -136,7 +140,9 @@ void MWindow::create_objects()
     root_h = get_h();
     if(client_mode)
     {
+#ifndef ONE_SCREEN
         set_cursor(TRANSPARENT_CURSOR, 0, 0);
+#endif
     }
     else
     {
@@ -174,8 +180,6 @@ void MWindow::load_defaults()
     }
 
 	defaults->load();
-    defaults = new BC_Hash("~/.readerrc");
-	defaults->load();
     BC_WindowBase::load_defaults(defaults);
     
     is_top = defaults->get("IS_TOP", 0);
@@ -199,8 +203,6 @@ void MWindow::load_defaults()
         get_resources()->filebox_h = ROOT_H;
     }
 
-
-    BC_WindowBase::load_defaults(defaults);
 
     char string[BCTEXTLEN];
     sprintf(string, "*%s", READER_SUFFIX);
@@ -742,6 +744,7 @@ int MWindow::keypress_event()
 
 int MWindow::button_press_event()
 {
+    if(client_mode) return 0;
     if(get_buttonpress() == 3)
     {
 //        hide_cursor();
@@ -811,6 +814,7 @@ int MWindow::button_press_event()
 
 int MWindow::button_release_event()
 {
+    if(client_mode) return 0;
     if(dragging)
     {
         if(drag_accum_x == 0 &&

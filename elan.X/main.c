@@ -1601,6 +1601,8 @@ int main(int argc, char** argv)
     INTCONbits.TMR0IF = 0;
     INTCONbits.TMR0IE = 1;
 
+// wait for the Elan to start
+    delay(1000);
     touchpad_init();
 
     LBUTTON_TRIS = 1;

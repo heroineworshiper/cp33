@@ -11,7 +11,8 @@
 
     <script>
     
-    const image_prefix = "test"
+    const image_prefix = "pelerinage"
+    const PAGES = 5
     var current_image = 0
     const img = document.getElementById('fullScreenImage');
     
@@ -37,6 +38,7 @@
     function nextPage()
     {
         current_image++
+        if(current_image >= PAGES) current_image = PAGES - 1
         loadImage()
     }
     
