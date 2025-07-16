@@ -30,16 +30,16 @@
 
 // enable 2 page mode using the client
 //#ifndef USE_WINDOW
-#define TWO_PAGE
+//#define TWO_PAGE
 //#endif // USE_WINDOW
 
 // 2 pages on 1 monitor
-#define ONE_SCREEN
+//#define ONE_SCREEN
 
-//#define ROOT_W 768
-//#define ROOT_H 1366
-#define ROOT_W 1080
-#define ROOT_H 1920
+#define ROOT_W 768
+#define ROOT_H 1366
+//#define ROOT_W 1080
+//#define ROOT_H 1920
 
 // where files are stored
 #define READER_PATH "/reader/"

@@ -53,7 +53,7 @@ elan.X: firmware for reading an Elon/Synaptics touchpad & exposing a USB HID dev
 
 touchpad.pcb: electronicals for the reader touchpad
 
-
+touchpad.FCStd: enclosure for touchpad
 
 
 

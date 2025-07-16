@@ -1,6 +1,6 @@
 /*
  * MUSIC READER
- * Copyright (C) 2021-2024 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2021-2025 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,6 +60,7 @@ int crop_y = 0;
 int crop_w = 9999;
 int crop_h = 9999;
 int crop_w2, crop_h2;
+int autocrop = 0;
 int dpi = DPI;
 int threshold = THRESHOLD;
 FILE *dest_fd;
@@ -157,6 +158,95 @@ void process_frame(uint8_t *src, int src_w, int src_h)
     int subrow;
     int col;
     int i, j;
+
+// search for black area.  Doesn't work because source always has noise
+    if(autocrop)
+    {
+        crop_x = 0;
+        crop_y = 0;
+        crop_w2 = src_w;
+        crop_h2 = src_h;
+
+        int count = 0;
+        int min_x_count = src_w / 100;
+        int min_y_count = src_h / 100;
+        for(i = 0; i < src_h; i++)
+        {
+            count = 0;
+            uint8_t *row = src + i * src_w;
+            for(j = 0; j < src_w; j++)
+            {
+                if(row[j] < THRESHOLD)
+                {
+                    count++;
+                    if(count >= min_x_count)
+                    {
+                        crop_y = i;
+                        crop_h2 -= i;
+                        i = src_h;
+                        break;
+                    }
+                }
+            }
+        }
+
+        for(i = src_h - 1; i >= 0; i--)
+        {
+            count = 0;
+            uint8_t *row = src + i * src_w;
+            for(j = 0; j < src_w; j++)
+            {
+                if(row[j] < THRESHOLD)
+                {
+                    count++;
+                    if(count >= min_x_count)
+                    {
+                        crop_h2 = i - crop_y;
+                        i = 0;
+                        break;
+                    }
+                }
+            }
+        }
+
+        for(i = 0; i < src_w; i++)
+        {
+            count = 0;
+            for(j = 0; j < src_h; j++)
+            {
+                if(src[j * src_w + i] < THRESHOLD)
+                {
+                    count++;
+                    if(count >= min_y_count)
+                    {
+                        crop_x = i;
+                        crop_w2 -= i;
+                        i = src_w;
+                        break;
+                    }
+                }
+            }
+        }
+
+        for(i = src_w - 1; i >= 0; i--)
+        {
+            count = 0;
+            for(j = 0; j < src_h; j++)
+            {
+                if(src[j * src_w + i] < THRESHOLD)
+                {
+                    count++;
+                    if(count >= min_y_count)
+                    {
+                        crop_w2 = i - crop_x;
+                        i = 0;
+                        break;
+                    }
+                }
+            }
+        }
+printf("autocrop: x=%d y=%d w=%d h=%d\n", crop_x, crop_y, crop_w2, crop_h2);
+    }
 
     for(i = 0; i < DISPLAY_H * 3 + 1; i++)
     {
@@ -416,6 +506,7 @@ int main(int argc, char *argv[])
             crop_y = dst[1];
             crop_w = dst[2];
             crop_h = dst[3];
+            if(crop_x < 0) autocrop = 1;
         }
         else
         if(!strcasecmp(command, "PAGES"))
@@ -442,7 +533,10 @@ int main(int argc, char *argv[])
     }
     printf("Page 1: %d\n", page1);
     printf("Page 2: %d\n", page2);
-    printf("Crop: %d,%d %dx%d\n", crop_x, crop_y, crop_w, crop_h);
+    if(autocrop)
+        printf("AUTO CROP\n");
+    else
+        printf("Crop: %d,%d %dx%d\n", crop_x, crop_y, crop_w, crop_h);
     printf("Dest: %s\n", dest);
     printf("DPI: %d\n", dpi);
     printf("Threshold: %d\n", threshold);

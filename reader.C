@@ -703,14 +703,14 @@ int load_file(const char *path)
     int _ = fread(&src_w, 1, 4, src_fd);
     _ = fread(&src_h, 1, 4, src_fd);
     _ = fread(&page_count, 1, 4, src_fd);
-    printf("Pages: %d\n", page_count);
+    printf("Pages: %d w=%d h=%d\n", page_count, src_w, src_h);
 
 
 // reject the content if the size differs
     if(src_w != MWindow::mwindow->root_w ||
         src_h != MWindow::mwindow->root_h)
     {
-        printf("main %d Source & screen have different dimensions\n", __LINE__);
+        printf("main %d: Source & screen have different dimensions\n", __LINE__);
         printf("source=%dx%d screen=%dx%d\n", 
             src_w, 
             src_h, 
@@ -751,6 +751,7 @@ int load_file(const char *path)
     {
         MWindow::mwindow->show_page(current_page, 1);
     }
+
     return 0;
 }
 
