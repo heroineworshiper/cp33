@@ -136,6 +136,13 @@ public:
     int handle_event();
 };
 
+class CaptureButton : public BC_Button
+{
+public:
+    CaptureButton(int x, int y);
+    int handle_event();
+};
+
 
 class Draw : public BC_Toggle
 {
@@ -255,7 +262,7 @@ public:
     BottomColor *bottom_color;
 // background for palette
     BC_Pixmap *bg_pixmap;
-    static MenuWindow *menu_window;
+    static MenuWindow *instance;
 };
 
 
@@ -266,7 +273,6 @@ public:
     MenuThread();
     void create_objects();
     void run();
-    MenuWindow *gui;
 };
 
 

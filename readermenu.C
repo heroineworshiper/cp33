@@ -1,6 +1,6 @@
 /*
  * MUSIC READER
- * Copyright (C) 2021 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2021-2025 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,10 +22,12 @@
 #include "reader.h"
 #include "readermenu.h"
 #include "readertheme.h"
-#include "readerwindow.h"
+#include "mwindow.h"
+#include "capture.h"
 #include "clip.h"
+#include <string.h>
 
-MenuWindow* MenuWindow::menu_window = 0;
+MenuWindow* MenuWindow::instance = 0;
 PaletteWindow* PaletteWindow::palette_window = 0;
 
 LoadFileWindow::LoadFileWindow(int x, int y, char *path)
@@ -52,32 +54,32 @@ BC_Window* LoadFileThread::new_gui()
 	char default_path[BCTEXTLEN];
 
 	sprintf(default_path, READER_PATH);
-	MWindow::mwindow->defaults->get("DEFAULT_LOADPATH", default_path);
+	MWindow::instance->defaults->get("DEFAULT_LOADPATH", default_path);
 
 
 // clamp the window size
-    if(MWindow::mwindow->get_resources()->filebox_w > MWindow::mwindow->root_w)
+    if(MWindow::instance->get_resources()->filebox_w > MWindow::instance->root_w)
     {
-        MWindow::mwindow->get_resources()->filebox_w = MWindow::mwindow->root_w;
+        MWindow::instance->get_resources()->filebox_w = MWindow::instance->root_w;
     }
-    if(MWindow::mwindow->get_resources()->filebox_h > MWindow::mwindow->root_h)
+    if(MWindow::instance->get_resources()->filebox_h > MWindow::instance->root_h)
     {
-        MWindow::mwindow->get_resources()->filebox_h = MWindow::mwindow->root_h;
+        MWindow::instance->get_resources()->filebox_h = MWindow::instance->root_h;
     }
 
 
-    int x = MWindow::mwindow->get_abs_cursor_x(1) - 
-        MWindow::mwindow->get_resources()->filebox_w / 2;
-    int y = MWindow::mwindow->get_abs_cursor_y(1) - 
-        MWindow::mwindow->get_resources()->filebox_h / 2;
+    int x = MWindow::instance->get_abs_cursor_x(1) - 
+        MWindow::instance->get_resources()->filebox_w / 2;
+    int y = MWindow::instance->get_abs_cursor_y(1) - 
+        MWindow::instance->get_resources()->filebox_h / 2;
 
-    if(x + MWindow::mwindow->get_resources()->filebox_w > MWindow::mwindow->root_w)
+    if(x + MWindow::instance->get_resources()->filebox_w > MWindow::instance->root_w)
     {
-        x = MWindow::mwindow->root_w - MWindow::mwindow->get_resources()->filebox_w;
+        x = MWindow::instance->root_w - MWindow::instance->get_resources()->filebox_w;
     }
-    if(y + MWindow::mwindow->get_resources()->filebox_h > MWindow::mwindow->root_h)
+    if(y + MWindow::instance->get_resources()->filebox_h > MWindow::instance->root_h)
     {
-        y = MWindow::mwindow->root_h - MWindow::mwindow->get_resources()->filebox_h;
+        y = MWindow::instance->root_h - MWindow::instance->get_resources()->filebox_h;
     }
     if(x < 0)
     {
@@ -91,9 +93,17 @@ BC_Window* LoadFileThread::new_gui()
 
 	gui = new LoadFileWindow(x, y, default_path);
     gui->get_filters()->remove_all_objects();
+
+
     char string[BCTEXTLEN];
-    sprintf(string, "*%s", READER_SUFFIX);
+    if(mode == READER_MODE)
+        sprintf(string, "*%s", READER_SUFFIX);
+    else
+        sprintf(string, "*.txt");
+//printf("LoadFileThread::new_gui %d %s\n", __LINE__, string);
+
     gui->get_filters()->append(new BC_ListBoxItem(string));
+    strcpy(BC_WindowBase::get_resources()->filebox_filter, string);
 
 	gui->create_objects();
 	return gui;
@@ -109,18 +119,21 @@ void LoadFileThread::handle_done_event(int result)
     gui->hide_window();
     gui->unlock_window();
 
-    MWindow::mwindow->defaults->update("DEFAULT_LOADPATH", gui->get_submitted_path());
-    MWindow::mwindow->save_defaults();
+    MWindow::instance->defaults->update("DEFAULT_LOADPATH", gui->get_submitted_path());
+    MWindow::instance->save_defaults();
 
     if(result == 0)
     {
-        ::load_file_entry(gui->get_submitted_path());
+        if(mode == READER_MODE)
+            ::load_file_entry(gui->get_submitted_path());
+        else
+            ::load_score(gui->get_submitted_path());
     }
     else
     {
 #ifndef BG_PIXMAP
 // refresh background
-        MWindow::mwindow->show_page(MWindow::mwindow->current_page);
+        MWindow::instance->show_page(MWindow::instance->current_page);
 #endif
     }
 }
@@ -146,15 +159,15 @@ int PaletteButton::handle_event()
 {
     if(is_top)
     {
-        MWindow::mwindow->top_color = color;
+        MWindow::instance->top_color = color;
     }
     else
     {
-        MWindow::mwindow->bottom_color = color;
+        MWindow::instance->bottom_color = color;
     }
-    MenuWindow::menu_window->update_colors();
+    MenuWindow::instance->update_colors();
 
-    MenuWindow::menu_window->hide_palette();
+    MenuWindow::instance->hide_palette();
     return 1;
 }
 
@@ -183,19 +196,19 @@ PaletteWindow::~PaletteWindow()
 void PaletteWindow::create_objects(int is_top)
 {
     lock_window();
-    int margin = MWindow::mwindow->theme->margin;
+    int margin = MWindow::instance->theme->margin;
     int x = margin;
     int y = margin;
     VFrame ***graphics = 0;
     const uint32_t *colors;
     if(is_top)
     {
-        graphics = MWindow::mwindow->theme->top_colors;
+        graphics = MWindow::instance->theme->top_colors;
         colors = MWindow::top_colors;
     }
     else
     {
-        graphics = MWindow::mwindow->theme->bottom_colors;
+        graphics = MWindow::instance->theme->bottom_colors;
         colors = MWindow::bottom_colors;
     }
     
@@ -237,7 +250,7 @@ int PaletteWindow::button_press_event()
 //         get_cursor_y());
     if(!is_event_subwin())
     {
-        MenuWindow::menu_window->hide_palette();
+        MenuWindow::instance->hide_palette();
         return 1;
     }
     return 1;
@@ -257,7 +270,7 @@ int PaletteWindow::cursor_motion_event()
 
 
 LoadFile::LoadFile(int x, int y)
- : BC_Button(x, y, MWindow::mwindow->theme->get_image_set("load"))
+ : BC_Button(x, y, MWindow::instance->theme->get_image_set("load"))
 {
     set_tooltip("Load file...");
 }
@@ -265,9 +278,9 @@ LoadFile::LoadFile(int x, int y)
 int LoadFile::handle_event()
 {
     unlock_window();
-    MWindow::mwindow->exit_drawing();
-    MenuWindow::menu_window->hide_windows(1);
-    MWindow::mwindow->load->start();
+    MWindow::instance->exit_drawing();
+    MenuWindow::instance->hide_windows(1);
+    MWindow::instance->load->start();
     
     lock_window();
     return 1;
@@ -277,7 +290,7 @@ int LoadFile::handle_event()
 
 
 Save::Save(int x, int y)
- : BC_Button(x, y, MWindow::mwindow->theme->get_image_set("save"))
+ : BC_Button(x, y, MWindow::instance->theme->get_image_set("save"))
 {
     set_tooltip("Save annotations");
 }
@@ -287,7 +300,7 @@ int Save::handle_event()
     start_hourglass();
     if(!save_annotations_entry())
     {
-        set_images(MWindow::mwindow->theme->get_image_set("save"));
+        set_images(MWindow::instance->theme->get_image_set("save"));
         draw_face(1);
         file_changed = 0;
     }
@@ -298,7 +311,7 @@ int Save::handle_event()
 
 
 Undo::Undo(int x, int y)
- : BC_Button(x, y, MWindow::mwindow->theme->get_image_set("undo"))
+ : BC_Button(x, y, MWindow::instance->theme->get_image_set("undo"))
 {
     set_tooltip("Undo");
 }
@@ -306,15 +319,15 @@ Undo::Undo(int x, int y)
 int Undo::handle_event()
 {
     unlock_window();
-    MWindow::mwindow->lock_window();
-    MWindow::mwindow->pop_undo();
-    MWindow::mwindow->unlock_window();
+    MWindow::instance->lock_window();
+    MWindow::instance->pop_undo();
+    MWindow::instance->unlock_window();
     lock_window();
     return 1;
 }
 
 Redo::Redo(int x, int y)
- : BC_Button(x, y, MWindow::mwindow->theme->get_image_set("redo"))
+ : BC_Button(x, y, MWindow::instance->theme->get_image_set("redo"))
 {
     set_tooltip("Redo");
 }
@@ -322,9 +335,9 @@ Redo::Redo(int x, int y)
 int Redo::handle_event()
 {
     unlock_window();
-    MWindow::mwindow->lock_window();
-    MWindow::mwindow->pop_redo();
-    MWindow::mwindow->unlock_window();
+    MWindow::instance->lock_window();
+    MWindow::instance->pop_redo();
+    MWindow::instance->unlock_window();
     lock_window();
     return 1;
 }
@@ -334,7 +347,7 @@ int Redo::handle_event()
 
 
 PrevPage::PrevPage(int x, int y)
- : BC_Button(x, y, MWindow::mwindow->theme->get_image_set("prev_page"))
+ : BC_Button(x, y, MWindow::instance->theme->get_image_set("prev_page"))
 {
     set_tooltip("Prev page");
 }
@@ -348,7 +361,7 @@ int PrevPage::handle_event()
 }
 
 NextPage::NextPage(int x, int y)
- : BC_Button(x, y, MWindow::mwindow->theme->get_image_set("next_page"))
+ : BC_Button(x, y, MWindow::instance->theme->get_image_set("next_page"))
 {
     set_tooltip("Next page");
 }
@@ -361,6 +374,18 @@ int NextPage::handle_event()
     return 1;
 }
 
+CaptureButton::CaptureButton(int x, int y)
+ : BC_Button(x, y, MWindow::instance->theme->get_image_set("capture"))
+{
+    set_tooltip("Notation entry");
+}
+
+int CaptureButton::handle_event()
+{
+    do_capture();
+    return 1;
+}
+
 
 
 
@@ -368,8 +393,8 @@ int NextPage::handle_event()
 Draw::Draw(int x, int y)
  : BC_Toggle(x, 
     y, 
-    MWindow::mwindow->theme->get_image_set("draw"), 
-    MWindow::mwindow->current_operation == DRAWING)
+    MWindow::instance->theme->get_image_set("draw"), 
+    MWindow::instance->current_operation == DRAWING)
 {
     set_tooltip("Draw");
 }
@@ -378,13 +403,13 @@ int Draw::handle_event()
 {
     if(get_value())
     {
-        MWindow::mwindow->enter_drawing(DRAWING);
+        MWindow::instance->enter_drawing(DRAWING);
     }
     else
     {
-        MWindow::mwindow->exit_drawing();
+        MWindow::instance->exit_drawing();
     }
-    MenuWindow::menu_window->update_buttons();
+    MenuWindow::instance->update_buttons();
     return 1;
 }
 
@@ -394,8 +419,8 @@ int Draw::handle_event()
 Erase::Erase(int x, int y)
  : BC_Toggle(x, 
     y, 
-    MWindow::mwindow->theme->get_image_set("erase"), 
-    MWindow::mwindow->current_operation == ERASING)
+    MWindow::instance->theme->get_image_set("erase"), 
+    MWindow::instance->current_operation == ERASING)
 {
     set_tooltip("Erase");
 }
@@ -404,13 +429,13 @@ int Erase::handle_event()
 {
     if(get_value())
     {
-        MWindow::mwindow->enter_drawing(ERASING);
+        MWindow::instance->enter_drawing(ERASING);
     }
     else
     {
-        MWindow::mwindow->exit_drawing();
+        MWindow::instance->exit_drawing();
     }
-    MenuWindow::menu_window->update_buttons();
+    MenuWindow::instance->update_buttons();
     return 1;
 }
 
@@ -419,8 +444,8 @@ int Erase::handle_event()
 Line::Line(int x, int y)
  : BC_Toggle(x, 
     y, 
-    MWindow::mwindow->theme->get_image_set("line"),
-    MWindow::mwindow->current_operation == DRAW_LINE)
+    MWindow::instance->theme->get_image_set("line"),
+    MWindow::instance->current_operation == DRAW_LINE)
 {
     set_tooltip("Line");
 }
@@ -429,13 +454,13 @@ int Line::handle_event()
 {
     if(get_value())
     {
-        MWindow::mwindow->enter_drawing(DRAW_LINE);
+        MWindow::instance->enter_drawing(DRAW_LINE);
     }
     else
     {
-        MWindow::mwindow->exit_drawing();
+        MWindow::instance->exit_drawing();
     }
-    MenuWindow::menu_window->update_buttons();
+    MenuWindow::instance->update_buttons();
     return 1;
 }
 
@@ -445,8 +470,8 @@ int Line::handle_event()
 Circle::Circle(int x, int y)
  : BC_Toggle(x, 
     y, 
-    MWindow::mwindow->theme->get_image_set("circle"),
-    MWindow::mwindow->current_operation == DRAW_CIRCLE)
+    MWindow::instance->theme->get_image_set("circle"),
+    MWindow::instance->current_operation == DRAW_CIRCLE)
 {
     set_tooltip("Circle");
 }
@@ -455,13 +480,13 @@ int Circle::handle_event()
 {
     if(get_value())
     {
-        MWindow::mwindow->enter_drawing(DRAW_CIRCLE);
+        MWindow::instance->enter_drawing(DRAW_CIRCLE);
     }
     else
     {
-        MWindow::mwindow->exit_drawing();
+        MWindow::instance->exit_drawing();
     }
-    MenuWindow::menu_window->update_buttons();
+    MenuWindow::instance->update_buttons();
     return 1;
 }
 
@@ -471,8 +496,8 @@ int Circle::handle_event()
 Disc::Disc(int x, int y)
  : BC_Toggle(x, 
     y, 
-    MWindow::mwindow->theme->get_image_set("disc"),
-    MWindow::mwindow->current_operation == DRAW_DISC)
+    MWindow::instance->theme->get_image_set("disc"),
+    MWindow::instance->current_operation == DRAW_DISC)
 {
     set_tooltip("Disc");
 }
@@ -481,13 +506,13 @@ int Disc::handle_event()
 {
     if(get_value())
     {
-        MWindow::mwindow->enter_drawing(DRAW_DISC);
+        MWindow::instance->enter_drawing(DRAW_DISC);
     }
     else
     {
-        MWindow::mwindow->exit_drawing();
+        MWindow::instance->exit_drawing();
     }
-    MenuWindow::menu_window->update_buttons();
+    MenuWindow::instance->update_buttons();
     return 1;
 }
 
@@ -495,8 +520,8 @@ int Disc::handle_event()
 Box::Box(int x, int y)
  : BC_Toggle(x, 
     y, 
-    MWindow::mwindow->theme->get_image_set("box"),
-    MWindow::mwindow->current_operation == DRAW_BOX)
+    MWindow::instance->theme->get_image_set("box"),
+    MWindow::instance->current_operation == DRAW_BOX)
 {
     set_tooltip("Disc");
 }
@@ -505,13 +530,13 @@ int Box::handle_event()
 {
     if(get_value())
     {
-        MWindow::mwindow->enter_drawing(DRAW_BOX);
+        MWindow::instance->enter_drawing(DRAW_BOX);
     }
     else
     {
-        MWindow::mwindow->exit_drawing();
+        MWindow::instance->exit_drawing();
     }
-    MenuWindow::menu_window->update_buttons();
+    MenuWindow::instance->update_buttons();
     return 1;
 }
 
@@ -519,7 +544,7 @@ int Box::handle_event()
 
 
 Top::Top(int x, int y)
- : BC_Button(x, y, MWindow::mwindow->theme->get_image_set("top_layer"))
+ : BC_Button(x, y, MWindow::instance->theme->get_image_set("top_layer"))
 {
     set_tooltip("Top layer");
 }
@@ -527,15 +552,15 @@ Top::Top(int x, int y)
 int Top::handle_event()
 {
     hide_window();
-    MWindow::mwindow->is_top = 0;
-    MenuWindow::menu_window->bottom->show_window();
-    MenuWindow::menu_window->bottom_color->show_window();
-    MenuWindow::menu_window->top_color->hide_window();
+    MWindow::instance->is_top = 0;
+    MenuWindow::instance->bottom->show_window();
+    MenuWindow::instance->bottom_color->show_window();
+    MenuWindow::instance->top_color->hide_window();
     return 1;
 }
 
 Bottom::Bottom(int x, int y)
- : BC_Button(x, y, MWindow::mwindow->theme->get_image_set("bottom_layer"))
+ : BC_Button(x, y, MWindow::instance->theme->get_image_set("bottom_layer"))
 {
     set_tooltip("Bottom layer");
 }
@@ -543,10 +568,10 @@ Bottom::Bottom(int x, int y)
 int Bottom::handle_event()
 {
     hide_window();
-    MWindow::mwindow->is_top = 1;
-    MenuWindow::menu_window->top->show_window();
-    MenuWindow::menu_window->bottom_color->hide_window();
-    MenuWindow::menu_window->top_color->show_window();
+    MWindow::instance->is_top = 1;
+    MenuWindow::instance->top->show_window();
+    MenuWindow::instance->bottom_color->hide_window();
+    MenuWindow::instance->top_color->show_window();
     return 1;
 }
 
@@ -556,36 +581,36 @@ int Bottom::handle_event()
 TopColor::TopColor(int x, int y)
  : BC_Button(x, 
     y, 
-    MWindow::mwindow->theme->top_colors[MWindow::mwindow->top_color])
+    MWindow::instance->theme->top_colors[MWindow::instance->top_color])
 {
     set_tooltip("Top color");
 }
 
 int TopColor::handle_event()
 {
-    MenuWindow::menu_window->show_palette(1);
+    MenuWindow::instance->show_palette(1);
     return 1;
 }
 
 BottomColor::BottomColor(int x, int y)
  : BC_Button(x, 
     y, 
-    MWindow::mwindow->theme->bottom_colors[MWindow::mwindow->bottom_color])
+    MWindow::instance->theme->bottom_colors[MWindow::instance->bottom_color])
 {
     set_tooltip("Bottom color");
 }
 
 int BottomColor::handle_event()
 {
-    MenuWindow::menu_window->show_palette(0);
+    MenuWindow::instance->show_palette(0);
     return 1;
 }
 
 
 
 DrawSize::DrawSize(int x, int y, int w)
- : BC_TumbleTextBox(MenuWindow::menu_window, 
-	MWindow::mwindow->draw_size,
+ : BC_TumbleTextBox(MenuWindow::instance, 
+	MWindow::instance->draw_size,
 	1,
 	MAX_BRUSH,
 	x, 
@@ -597,25 +622,25 @@ DrawSize::DrawSize(int x, int y, int w)
 
 int DrawSize::handle_event()
 {
-    MenuWindow::menu_window->unlock_window();
-    MWindow::mwindow->lock_window();
-    int cursor_x = MWindow::mwindow->cursor_x;
-    int cursor_y = MWindow::mwindow->cursor_y;
-    MWindow::mwindow->hide_cursor();
+    MenuWindow::instance->unlock_window();
+    MWindow::instance->lock_window();
+    int cursor_x = MWindow::instance->cursor_x;
+    int cursor_y = MWindow::instance->cursor_y;
+    MWindow::instance->hide_cursor();
     int value = atoi(get_text());
     CLAMP(value, 1, MAX_BRUSH);
-    MWindow::mwindow->draw_size = value;
-    MWindow::mwindow->update_cursor(cursor_x, cursor_y);
-    MWindow::mwindow->unlock_window();
-    MenuWindow::menu_window->lock_window();
+    MWindow::instance->draw_size = value;
+    MWindow::instance->update_cursor(cursor_x, cursor_y);
+    MWindow::instance->unlock_window();
+    MenuWindow::instance->lock_window();
     return 1;
 }
 
 
 
 EraseSize::EraseSize(int x, int y, int w)
- : BC_TumbleTextBox(MenuWindow::menu_window, 
-	MWindow::mwindow->erase_size,
+ : BC_TumbleTextBox(MenuWindow::instance, 
+	MWindow::instance->erase_size,
 	1,
 	MAX_BRUSH,
 	x, 
@@ -627,17 +652,17 @@ EraseSize::EraseSize(int x, int y, int w)
 
 int EraseSize::handle_event()
 {
-    MenuWindow::menu_window->unlock_window();
-    MWindow::mwindow->lock_window();
-    int cursor_x = MWindow::mwindow->cursor_x;
-    int cursor_y = MWindow::mwindow->cursor_y;
-    MWindow::mwindow->hide_cursor();
+    MenuWindow::instance->unlock_window();
+    MWindow::instance->lock_window();
+    int cursor_x = MWindow::instance->cursor_x;
+    int cursor_y = MWindow::instance->cursor_y;
+    MWindow::instance->hide_cursor();
     int value = atoi(get_text());
     CLAMP(value, 1, MAX_BRUSH);
-    MWindow::mwindow->erase_size = value;
-    MWindow::mwindow->update_cursor(cursor_x, cursor_y);
-    MWindow::mwindow->unlock_window();
-    MenuWindow::menu_window->lock_window();
+    MWindow::instance->erase_size = value;
+    MWindow::instance->update_cursor(cursor_x, cursor_y);
+    MWindow::instance->unlock_window();
+    MenuWindow::instance->lock_window();
     return 1;
 }
 
@@ -647,13 +672,13 @@ int EraseSize::handle_event()
 
 
 MenuWindow::MenuWindow()
- : BC_Window("Menu", 
+ : BC_Window("Reader Menu", 
     0,
     0,
-	MWindow::mwindow->theme->get_image_set("load")[0]->get_w() * 4 + 
-        MWindow::mwindow->theme->margin * 2, 
-	MWindow::mwindow->theme->get_image_set("load")[0]->get_h() * 5 + 
-        MWindow::mwindow->theme->margin * 2,
+	MWindow::instance->theme->get_image_set("load")[0]->get_w() * 4 + 
+        MWindow::instance->theme->margin * 2, 
+	MWindow::instance->theme->get_image_set("load")[0]->get_h() * 6 + 
+        MWindow::instance->theme->margin * 2,
     -1,
     -1,
     0,
@@ -670,11 +695,11 @@ MenuWindow::~MenuWindow()
 
 void MenuWindow::create_objects()
 {
-    lock_window();
-    int margin = MWindow::mwindow->theme->margin;
-    int x1 = MWindow::mwindow->theme->margin;
+//    lock_window();
+    int margin = MWindow::instance->theme->margin;
+    int x1 = MWindow::instance->theme->margin;
     int x = x1;
-    int y = MWindow::mwindow->theme->margin;
+    int y = MWindow::instance->theme->margin;
     BC_SubWindow *window;
     add_tool(window = new LoadFile(x, y));
     x += window->get_w();
@@ -730,30 +755,33 @@ void MenuWindow::create_objects()
     y += window->get_h();
     x = x1;
 
-    unlock_window();
+    add_tool(window = new CaptureButton(x, y));
+
+
+//    unlock_window();
 }
 
 int MenuWindow::close_event()
 {
-    MWindow::mwindow->exit_drawing();
+    MWindow::instance->exit_drawing();
     hide_windows(0);
 
 #ifndef BG_PIXMAP
 // refresh
-    MWindow::mwindow->show_page(MWindow::mwindow->current_page);
+    MWindow::instance->show_page(MWindow::instance->current_page);
 #endif
     return 1;
 }
 
 void MenuWindow::update_buttons()
 {
-    draw->set_value(MWindow::mwindow->current_operation == DRAWING);
-    erase->set_value(MWindow::mwindow->current_operation == ERASING);
-    line->set_value(MWindow::mwindow->current_operation == DRAW_LINE);
-    circle->set_value(MWindow::mwindow->current_operation == DRAW_CIRCLE);
-    disc->set_value(MWindow::mwindow->current_operation == DRAW_DISC);
-    box->set_value(MWindow::mwindow->current_operation == DRAW_BOX);
-    if(MWindow::mwindow->is_top)
+    draw->set_value(MWindow::instance->current_operation == DRAWING);
+    erase->set_value(MWindow::instance->current_operation == ERASING);
+    line->set_value(MWindow::instance->current_operation == DRAW_LINE);
+    circle->set_value(MWindow::instance->current_operation == DRAW_CIRCLE);
+    disc->set_value(MWindow::instance->current_operation == DRAW_DISC);
+    box->set_value(MWindow::instance->current_operation == DRAW_BOX);
+    if(MWindow::instance->is_top)
     {
         bottom->hide_window();
         bottom_color->hide_window();
@@ -771,17 +799,17 @@ void MenuWindow::show_palette(int top)
     {
         int x = get_abs_cursor_x(0);
         int y = get_abs_cursor_y(0);
-        int w = MWindow::mwindow->theme->get_image_set("load")[0]->get_w() * 4 + 
-            MWindow::mwindow->theme->margin * 2;
-        int h = MWindow::mwindow->theme->get_image_set("load")[0]->get_h() * 2 + 
-            MWindow::mwindow->theme->margin * 2;
-        if(x + w > MWindow::mwindow->root_w)
+        int w = MWindow::instance->theme->get_image_set("load")[0]->get_w() * 4 + 
+            MWindow::instance->theme->margin * 2;
+        int h = MWindow::instance->theme->get_image_set("load")[0]->get_h() * 2 + 
+            MWindow::instance->theme->margin * 2;
+        if(x + w > MWindow::instance->root_w)
         {
-            x = MWindow::mwindow->root_w - w;
+            x = MWindow::instance->root_w - w;
         }
-        if(y + h > MWindow::mwindow->root_h)
+        if(y + h > MWindow::instance->root_h)
         {
-            y = MWindow::mwindow->root_h - h;
+            y = MWindow::instance->root_h - h;
         }
         if(!bg_pixmap)
         {
@@ -790,7 +818,7 @@ void MenuWindow::show_palette(int top)
 		        0, 
 		        w, 
                 h,
-		        MWindow::mwindow->theme->get_image("palette_bg"),
+		        MWindow::instance->theme->get_image("palette_bg"),
 		        bg_pixmap);
         }
         PaletteWindow::palette_window = new PaletteWindow(
@@ -815,9 +843,9 @@ void MenuWindow::hide_palette()
 
 void MenuWindow::update_colors()
 {
-    top_color->set_images(MWindow::mwindow->theme->top_colors[MWindow::mwindow->top_color]);
+    top_color->set_images(MWindow::instance->theme->top_colors[MWindow::instance->top_color]);
     top_color->draw_face(1);
-    bottom_color->set_images(MWindow::mwindow->theme->bottom_colors[MWindow::mwindow->bottom_color]);
+    bottom_color->set_images(MWindow::instance->theme->bottom_colors[MWindow::instance->bottom_color]);
     bottom_color->draw_face(1);
 }
 
@@ -843,13 +871,13 @@ MenuThread::MenuThread()
 
 void MenuThread::create_objects()
 {
-	gui = MenuWindow::menu_window = new MenuWindow;
-    gui->create_objects();
+	MenuWindow::instance = new MenuWindow;
+    MenuWindow::instance->create_objects();
 }
 
 void MenuThread::run()
 {
-    gui->run_window();
+    MenuWindow::instance->run_window();
 }
 
 

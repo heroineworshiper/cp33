@@ -26,14 +26,17 @@ Instructions for building are in cp33.c & piano.c
 What you'll find here:
 
 
-cp33.c: STM32 firmware that runs inside the CP33 to convert I2S to USB
+CP33: Android program for controlling piano.c
+
+cp33.c: STM32 firmware that converts I2S to USB for piano.c
 
 cp33.pcb: I2S capture board
 
-recordcp33.c: Original linux program that converted USB output to a sound file.
+recordcp33.c: Original linux program that converted the output of cp33.c
+to a sound file.
 
 pdftoreader.c: obsolete sheet music converter
-pdftoreader2.c: Convert sheet music to compressed reader files.
+pdftoreader2.c: Convert sheet music to compressed files for reader.C
 
 reader.conf: example configuration file for pdftoreader2
 
@@ -43,9 +46,11 @@ reader_client.sh
 piano.sh: wrapper scripts for running the programs on startup
 
 
-piano.c, pianoserver.c, piano.h: the executable for the realtime audio processor
+piano.c, pianoserver.c, piano.h: 
+    - realtime audio processor for I2S audio output inside a digital piano
 
-index.html, metro.wav favicon.ico record.png stop.png single.gif: assets for the GUI
+index.html, metro.wav favicon.ico record.png stop.png single.gif: 
+    assets for the GUI when piano.c was a web app
 
 wifi.py: useful script for manetaining a wifi station
 
@@ -57,9 +62,11 @@ touchpad.FCStd: enclosure for touchpad
 
 
 
-reader.c:
+reader.C:
 Music display for dual raspberry pi's
 --------------------------------------------------------------------------------
+The only raspberry pi's which supported 1366x768 were single HDMI so a dual
+display required 2.
 This requires configuring Xorg on the raspberry pi.
 
 Set up the framebuffer in /boot/config.txt by adding the following lines
@@ -142,19 +149,19 @@ Compile it on a raspberry:
     make -f Makefile.reader
     scp reader pi2:
 
-The music files are .reader.gz.
+The music files are .reader.gz files.
 Both confusers need a /reader directory with all the music files.  The
 client needs to mount it over NFS.
 
 
 
-Run it on the client 1st:
+Run the client 1st:
 mount /reader
 Xorg&
 export DISPLAY=:0
 nohup ./reader -c 1234 1235>& /dev/null&
 
-Run it on the server 2nd:
+Run the controller 2nd:
 xinit /usr/bin/fvwm2&
 export DISPLAY=:0
 xinput
@@ -169,7 +176,7 @@ changed on later pi's so there are no more pictures showing the original
 GPIO numbers.
 
 
-
+----------------------------------------------------------------------------
 
 lcd.FCStd: LCD stand
     print with .8mm nozzle

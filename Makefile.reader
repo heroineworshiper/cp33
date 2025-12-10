@@ -1,18 +1,27 @@
 OBJDIR := $(shell uname --machine)
 CC := g++
-CXXFLAGS := -O3 -Iguicast
+CXXFLAGS := -g -O3 -Iguicast
 
 # windowed mode on x86
+# assume it's being built against a Cinelerra library
+# which had HAVE_GL defined
 ifeq ($(OBJDIR), x86_64)
-CXXFLAGS += -DUSE_WINDOW
+CXXFLAGS += -DUSE_WINDOW -DHAVE_GL
 endif
 
 PNGS := \
+    images/8va.png \
+    images/bass.png \
     images/bottom_layer.png \
 	images/box.png \
+	images/bigbutton_dn.png \
+	images/bigbutton_hi.png \
+	images/bigbutton_up.png \
 	images/button_dn.png \
 	images/button_hi.png \
 	images/button_up.png \
+    images/cancel.png \
+    images/capture.png \
     images/check_hi.png \
     images/check.png \
     images/circle.png \
@@ -20,23 +29,37 @@ PNGS := \
     images/disc.png \
     images/draw.png \
     images/erase.png \
+    images/erase1.png \
+    images/flat.png \
+    images/ledger.png \
     images/line.png \
 	images/load.png \
+    images/natural.png \
     images/next_page.png \
+    images/ok.png \
     images/palette_bg.png \
     images/prev_page.png \
+    images/quarter.png \
+    images/reader.png \
+    images/record.png \
     images/redo.png \
     images/save2.png \
     images/save.png \
+    images/sharp.png \
+    images/stop.png \
+    images/treble.png \
     images/top_layer.png \
     images/undo.png \
 
 
 OBJS := \
+    capture.o \
+    capturemenu.o \
 	reader.o \
     readermenu.o \
 	readertheme.o \
-	readerwindow.o
+    score.o \
+	mwindow.o
 	
 
 LIBS := \
@@ -54,6 +77,11 @@ ifeq ($(OBJDIR), armv6l)
 LIBS += -lwiringPi
 endif
 
+ifeq ($(OBJDIR), x86_64)
+LIBS += -lGL
+endif
+
+
 reader: $(OBJS) theme_data.o guicast/$(OBJDIR)/libguicast.a
 	$(CC) -o reader $(OBJS) theme_data.o $(LIBS)
 
@@ -64,4 +92,13 @@ theme_data.o:
 	$(CC) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f reader *.o
+	rm -f reader *.o theme_data
+
+
+
+
+
+
+
+
+

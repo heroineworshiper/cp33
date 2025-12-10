@@ -23,6 +23,7 @@
 #define READER_H
 
 
+#include "capture.inc"
 #include "guicast.h"
 #include "reader.inc"
 
@@ -84,11 +85,19 @@
 #define DRAW_DISC 5
 #define DRAW_RECT 6
 #define DRAW_BOX 7
+#define RECORD_MIDI 8
+#define ERASE_NOTES 9
+
 
 extern int client_mode;
 extern char reader_path[BCTEXTLEN];
 extern int file_changed;
 extern int current_page;
+
+
+#define READER_MODE 0
+#define CAPTURE_MODE 1
+extern int mode;
 
 int save_annotations();
 int save_annotations_entry();
@@ -99,6 +108,8 @@ int send_command(int id, uint8_t *value, int value_size);
 int wait_command();
 void prev_page(int step, int lock_it);
 void next_page(int step, int lock_it);
+void do_capture();
+void do_reader();
 
 
 class Page

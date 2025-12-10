@@ -1,6 +1,6 @@
 /*
  * MUSIC READER
- * Copyright (C) 2021 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2021-2025 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,11 +19,13 @@
  */
 
 
-#ifndef READERWINDOW_H
-#define READERWINDOW_H
+#ifndef MWINDOW_H
+#define MWINDOW_H
 
+#include "capture.inc"
 #include "guicast.h"
-#include "reader.inc"
+#include "reader.h"
+#include "score.inc"
 
 
 class MWindow : public BC_Window
@@ -41,6 +43,11 @@ public:
         int y2,
         int lock_it);
     int export_page(const char *export_path, int number);
+
+
+    void draw_score();
+    void button_press();
+    void draw_group(Staff *staff, Group *group);
 
     int keypress_event();
     int button_release_event();
@@ -94,6 +101,8 @@ public:
     void push_undo_after();
     void pop_undo();
     void pop_redo();
+    void pop_capture_undo();
+    void pop_capture_redo();
     void update_save();
 
     int root_w;
@@ -129,11 +138,10 @@ public:
     VFrame *undo_before[UNDO_LEVELS];
     VFrame *undo_after[UNDO_LEVELS];
 
-    MenuThread *menu;
     LoadFileThread *load;
     ReaderTheme *theme;
     BC_Hash *defaults;
-    static MWindow *mwindow;
+    static MWindow *instance;
 
     static const uint32_t top_colors[TOTAL_COLORS];
     static const uint32_t bottom_colors[TOTAL_COLORS];
@@ -165,6 +173,15 @@ public:
     int drag_accum_x;
     int drag_accum_y;
     int dragging;
+
+    static BC_Pixmap *sharp;
+    static BC_Pixmap *flat;
+    static BC_Pixmap *natural;
+    BC_Pixmap *quarter;
+    BC_Pixmap *ledger;
+    BC_Pixmap *treble;
+    BC_Pixmap *bass;
+    BC_Pixmap *octave;
 };
 
 

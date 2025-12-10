@@ -64,11 +64,19 @@
 #include <sys/stat.h>
 
 
+#include "capture.h"
+#include "capturemenu.h"
+#include "mwindow.h"
 #include "reader.h"
 //#include "readerbrushes.h"
 #include "readermenu.h"
 #include "readertheme.h"
-#include "readerwindow.h"
+#include "score.h"
+
+
+
+
+
 
 
 typedef struct
@@ -109,10 +117,14 @@ struct fb_fix_screeninfo finfo;
 int screensize = 0;
 char *fbp = 0;
 
-// the current file
+// the current reader file
 char reader_path[BCTEXTLEN];
 int file_changed = 0;
 int current_page = 0;
+
+int mode = READER_MODE;
+
+
 
 char client_address[BCTEXTLEN];
 int client_port;
@@ -151,19 +163,19 @@ void next_page(int step, int lock_it)
 #ifdef TWO_PAGE
     if(current_page < pages.size() - step)
     {
-        MWindow::mwindow->reset_undo();
+        MWindow::instance->reset_undo();
         current_page += step;
         int temp = current_page + 1;
         send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
-        MWindow::mwindow->show_page(current_page, lock_it);
+        MWindow::instance->show_page(current_page, lock_it);
         wait_command();
     }
 #else
     if(current_page < pages.size() - 1)
     {
-        MWindow::mwindow->reset_undo();
+        MWindow::instance->reset_undo();
         current_page++;
-        MWindow::mwindow->show_page(current_page, lock_it);
+        MWindow::instance->show_page(current_page, lock_it);
     }
 #endif
 }
@@ -174,7 +186,7 @@ void prev_page(int step, int lock_it)
     if(current_page > 0)
     {
 #ifdef TWO_PAGE
-        MWindow::mwindow->reset_undo();
+        MWindow::instance->reset_undo();
         current_page -= step;
         if(current_page < 0)
         {
@@ -182,14 +194,34 @@ void prev_page(int step, int lock_it)
         }
         int temp = current_page + 1;
         send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
-        MWindow::mwindow->show_page(current_page, lock_it);
+        MWindow::instance->show_page(current_page, lock_it);
         wait_command();
 #else
-        MWindow::mwindow->reset_undo();
+        MWindow::instance->reset_undo();
         current_page--;
-        MWindow::mwindow->show_page(current_page, lock_it);
+        MWindow::instance->show_page(current_page, lock_it);
 #endif
     }
+}
+
+// called from MenuWindow
+void do_capture()
+{
+    mode = CAPTURE_MODE;
+    MWindow::instance->current_operation = IDLE;
+
+    MenuWindow::instance->hide_windows(0);
+    CaptureMenu::instance->show();
+    MWindow::instance->draw_score();
+}
+
+void do_reader()
+{
+    mode = READER_MODE;
+    MWindow::instance->current_operation = IDLE;
+
+    CaptureMenu::instance->hide_window();
+    MWindow::instance->show_page(current_page, 1);
 }
 
 void update_button_state(button_state_t *ptr, int value)
@@ -392,7 +424,7 @@ void* client_thread(void *ptr)
                 result = load_annotations();
                 if(!result)
                 {
-                    MWindow::mwindow->show_page(current_page, 1);
+                    MWindow::instance->show_page(current_page, 1);
                 }
                 break;
             case SHOW_PAGE:
@@ -400,7 +432,7 @@ void* client_thread(void *ptr)
                     (((uint32_t)packet[2]) << 8) |
                     (((uint32_t)packet[3]) << 16) |
                     (((uint32_t)packet[4]) << 24);
-                MWindow::mwindow->show_page(current_page, 1);
+                MWindow::instance->show_page(current_page, 1);
                 result = 0;
                 break;
         }
@@ -676,10 +708,10 @@ int load_file(const char *path)
     else
     {
         current_page = 0;
-        MWindow::mwindow->reset_undo();
-        MWindow::mwindow->zoom_x = 0;
-        MWindow::mwindow->zoom_y = 0;
-        MWindow::mwindow->zoom_factor = 1;
+        MWindow::instance->reset_undo();
+        MWindow::instance->zoom_x = 0;
+        MWindow::instance->zoom_y = 0;
+        MWindow::instance->zoom_factor = 1;
     }
 
     strcpy(reader_path, path);
@@ -693,7 +725,7 @@ int load_file(const char *path)
         char string[BCTEXTLEN];
         sprintf(string, "Couldn't load:\n%s", path);
         printf("load_file %d: couldn't open image file %s\n", __LINE__, path);
-        MWindow::mwindow->show_error(string);
+        MWindow::instance->show_error(string);
         return 1;
     }
 
@@ -707,15 +739,15 @@ int load_file(const char *path)
 
 
 // reject the content if the size differs
-    if(src_w != MWindow::mwindow->root_w ||
-        src_h != MWindow::mwindow->root_h)
+    if(src_w != MWindow::instance->root_w ||
+        src_h != MWindow::instance->root_h)
     {
         printf("main %d: Source & screen have different dimensions\n", __LINE__);
         printf("source=%dx%d screen=%dx%d\n", 
             src_w, 
             src_h, 
-            MWindow::mwindow->root_w, 
-            MWindow::mwindow->root_h);
+            MWindow::instance->root_w, 
+            MWindow::instance->root_h);
         fclose(src_fd);
         return 1;
     }
@@ -742,14 +774,14 @@ int load_file(const char *path)
     {
         for(i = 0; i < page_count; i++)
         {
-            if(MWindow::mwindow->export_page(export_path, i)) break;
+            if(MWindow::instance->export_page(export_path, i)) break;
         }
         exit(0);
     }
     else
 // show page 1
     {
-        MWindow::mwindow->show_page(current_page, 1);
+        MWindow::instance->show_page(current_page, 1);
     }
 
     return 0;
@@ -762,12 +794,12 @@ void load_file_entry(const char *path)
         save_annotations();
     }
 
-    MenuWindow::menu_window->lock_window();
-    MenuWindow::menu_window->start_hourglass();
-    MenuWindow::menu_window->unlock_window();
-    MWindow::mwindow->lock_window();
-    MWindow::mwindow->start_hourglass();
-    MWindow::mwindow->unlock_window();
+    MenuWindow::instance->lock_window();
+    MenuWindow::instance->start_hourglass();
+    MenuWindow::instance->unlock_window();
+    MWindow::instance->lock_window();
+    MWindow::instance->start_hourglass();
+    MWindow::instance->unlock_window();
 
 #ifdef TWO_PAGE
     send_command(LOAD_FILE, 
@@ -779,14 +811,14 @@ void load_file_entry(const char *path)
     ::load_file(path);
 #endif
 
-    MenuWindow::menu_window->lock_window();
-    MenuWindow::menu_window->save->set_images(MWindow::mwindow->theme->get_image_set("save"));
-    MenuWindow::menu_window->save->draw_face(1);
-    MenuWindow::menu_window->stop_hourglass();
-    MenuWindow::menu_window->unlock_window();
-    MWindow::mwindow->lock_window();
-    MWindow::mwindow->stop_hourglass();
-    MWindow::mwindow->unlock_window();
+    MenuWindow::instance->lock_window();
+    MenuWindow::instance->save->set_images(MWindow::instance->theme->get_image_set("save"));
+    MenuWindow::instance->save->draw_face(1);
+    MenuWindow::instance->stop_hourglass();
+    MenuWindow::instance->unlock_window();
+    MWindow::instance->lock_window();
+    MWindow::instance->stop_hourglass();
+    MWindow::instance->unlock_window();
 
 }
 
@@ -884,13 +916,17 @@ int main(int argc, char *argv[])
         }
     }
 
+// the mane database
+    Score::instance = new Score;
+    Score::instance->test();
+
 //    init_fb();
     BC_Resources::dpi = BASE_DPI;
     BC_Resources::override_dpi = 1;
 //    init_brushes();
     MWindow::init_colors();
-    MWindow::mwindow = new MWindow;
-    MWindow::mwindow->create_objects();
+    MWindow::instance = new MWindow;
+    MWindow::instance->create_objects();
 
     if(!client_mode && client_address[0])
     {
@@ -942,10 +978,10 @@ int main(int argc, char *argv[])
 // #ifdef TWO_PAGE
 //         int temp = i + 1;
 //         send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
-//         MWindow::mwindow->show_page(i, 1);
+//         MWindow::instance->show_page(i, 1);
 //         wait_command();
 // #else
-//         MWindow::mwindow->show_page(i, 1);
+//         MWindow::instance->show_page(i, 1);
 // #endif
 //         i++;
 //         page_count++;
@@ -961,12 +997,12 @@ int main(int argc, char *argv[])
 //         }
 //     }
 
-    MWindow::mwindow->run_window();
+    MWindow::instance->run_window();
     if(file_changed)
     {
         save_annotations();
     }
-    MWindow::mwindow->save_defaults();
+    MWindow::instance->save_defaults();
     return 0;
 }
 

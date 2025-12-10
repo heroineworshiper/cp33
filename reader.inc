@@ -4,6 +4,7 @@
 class LoadFileThread;
 class ManeWindow;
 class MenuThread;
+class CaptureThread;
 class ReaderTheme;
 
 #define TOTAL_COLORS 8

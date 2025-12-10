@@ -1,6 +1,6 @@
 /*
  * MUSIC READER
- * Copyright (C) 2021 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2021-2025 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,8 @@
  * 
  */
 
+#include "capture.h"
+#include "capturemenu.h"
 #include "clip.h"
 #include "cursors.h"
 #include "keys.h"
@@ -25,12 +27,17 @@
 //#include "readerbrushes.h"
 #include "readermenu.h"
 #include "readertheme.h"
-#include "readerwindow.h"
+#include "mwindow.h"
 #include <string.h>
 #include <unistd.h>
 
 
-MWindow* MWindow::mwindow = 0;
+MWindow* MWindow::instance = 0;
+BC_Pixmap* MWindow::sharp = 0;
+BC_Pixmap* MWindow::flat = 0;
+BC_Pixmap* MWindow::natural = 0;
+
+
 const uint32_t MWindow::top_colors[TOTAL_COLORS] = 
 {
     0xffffff, // white/erase
@@ -107,9 +114,12 @@ void MWindow::create_objects()
 {
     load_defaults();
 
+
+
     theme = new ReaderTheme;
     theme->initialize();
     get_resources()->bg_color = WHITE;
+
 
     oval_table[0] = 0;
     for(int i = 1; i < OVAL_BASE; i++)
@@ -152,6 +162,14 @@ void MWindow::create_objects()
             undo_after[i] = new VFrame(ROOT_W, ROOT_H, BC_A8);
         }
 
+        quarter = new BC_Pixmap(this, theme->new_image("quarter.png"), PIXMAP_ALPHA);
+        sharp = new BC_Pixmap(this, theme->new_image("sharp.png"), PIXMAP_ALPHA);
+        flat = new BC_Pixmap(this, theme->new_image("flat.png"), PIXMAP_ALPHA);
+        natural = new BC_Pixmap(this, theme->new_image("natural.png"), PIXMAP_ALPHA);
+        ledger = new BC_Pixmap(this, theme->new_image("ledger.png"), PIXMAP_ALPHA);
+        treble = new BC_Pixmap(this, theme->new_image("treble.png"), PIXMAP_ALPHA);
+        bass = new BC_Pixmap(this, theme->new_image("bass.png"), PIXMAP_ALPHA);
+        octave = new BC_Pixmap(this, theme->new_image("8va.png"), PIXMAP_ALPHA);
     }
 
 // draw bitmaps to the foreground/win instead of the back buffer/pixmap
@@ -163,10 +181,13 @@ void MWindow::create_objects()
 
     show_window(1);
 
-    menu = new MenuThread;
-    menu->create_objects();
-    menu->start();
-    
+    MenuThread *reader_menu = new MenuThread;
+    reader_menu->create_objects();
+    reader_menu->start();
+    CaptureThread *capture_menu = new CaptureThread;
+    capture_menu->create_objects();
+    capture_menu->start();
+
     load = new LoadFileThread;
 //    printf("MWindow::create_objects %d color_model=%d\n", __LINE__, get_color_model());
 }
@@ -205,7 +226,10 @@ void MWindow::load_defaults()
 
 
     char string[BCTEXTLEN];
-    sprintf(string, "*%s", READER_SUFFIX);
+    if(mode == READER_MODE)
+        sprintf(string, "*%s", READER_SUFFIX);
+    else
+        sprintf(string, "*.txt");
     strcpy(get_resources()->filebox_filter, string);
 }
 
@@ -240,11 +264,11 @@ void MWindow::update_save()
     {
         file_changed = 1;
         unlock_window();
-        MenuWindow::menu_window->lock_window();
-        MenuWindow::menu_window->save->set_images(
-            MWindow::mwindow->theme->get_image_set("save2"));
-        MenuWindow::menu_window->save->draw_face(1);
-        MenuWindow::menu_window->unlock_window();
+        MenuWindow::instance->lock_window();
+        MenuWindow::instance->save->set_images(
+            MWindow::instance->theme->get_image_set("save2"));
+        MenuWindow::instance->save->draw_face(1);
+        MenuWindow::instance->unlock_window();
         lock_window();
     }
 }
@@ -716,20 +740,34 @@ void MWindow::toggle_zoom()
 }
 
 // debugging only
+// key commands are for testing only
 int MWindow::keypress_event()
 {
     switch(get_keypress())
     {
-// keyboard page turns are for testing only
         case LEFT:
-            prev_page(2, 0);
+            if(mode == READER_MODE)
+                prev_page(2, 0);
+            else
+                prev_beat();
             break;
 
         case RIGHT:
-            next_page(2, 0);
+            if(mode == READER_MODE)
+                next_page(2, 0);
+            else
+                next_beat();
             break;
 
-// keyboard zoom is for testing only
+        case UP:
+            if(mode == CAPTURE_MODE)
+                prev_staff();
+            break;
+        case DOWN:
+            if(mode == CAPTURE_MODE)
+                next_staff();
+            break;
+
         case 'z':
             toggle_zoom();
             break;
@@ -745,6 +783,26 @@ int MWindow::keypress_event()
 int MWindow::button_press_event()
 {
     if(client_mode) return 0;
+
+
+    if(mode == CAPTURE_MODE &&
+        get_buttonpress() == 1)
+    {
+        if(!CaptureMenu::instance->get_hidden())
+        {
+//printf("MWindow::button_press_event %d %p %p\n", 
+//__LINE__, CaptureMenu::instance, MenuWindow::instance);
+            unlock_window();
+            CaptureMenu::instance->lock_window();
+            CaptureMenu::instance->raise_window(1);
+            CaptureMenu::instance->unlock_window();
+            lock_window();
+        }
+        button_press();
+        draw_score();
+        return 1;
+    }
+
     if(get_buttonpress() == 3)
     {
 //        hide_cursor();
@@ -760,12 +818,13 @@ int MWindow::button_press_event()
     }
 
 // raise the menu
-    if(!MenuWindow::menu_window->get_hidden() &&
+    if(!MenuWindow::instance->get_hidden() &&
         current_operation != IDLE)
     {
-        MenuWindow::menu_window->lock_window();
-        MenuWindow::menu_window->raise_window(1);
-        MenuWindow::menu_window->unlock_window();
+printf("MWindow::button_press_event %d\n", __LINE__);
+        MenuWindow::instance->lock_window();
+        MenuWindow::instance->raise_window(1);
+        MenuWindow::instance->unlock_window();
     }
 
 // start a line segment
@@ -815,6 +874,52 @@ int MWindow::button_press_event()
 int MWindow::button_release_event()
 {
     if(client_mode) return 0;
+
+    if(mode == CAPTURE_MODE &&
+        get_buttonpress() == 1)
+    {
+//         int x = get_abs_cursor_x(0);
+//         int y = get_abs_cursor_y(0);
+//         unlock_window();
+// 
+//         CaptureMenu::instance->lock_window();
+//         if(x + CaptureMenu::instance->get_w() > root_w)
+//         {
+//             x = root_w - CaptureMenu::instance->get_w();
+//         }
+//         if(y + CaptureMenu::instance->get_h() > root_h)
+//         {
+//             y = root_h - CaptureMenu::instance->get_h();
+//         }
+//         if(x < 0)
+//         {
+//             x = 0;
+//         }
+// 
+//         if(y < 0)
+//         {
+//             y = 0;
+//         }
+//         CaptureMenu::instance->unlock_window();
+//         if(CaptureMenu::instance->get_hidden())
+//         {
+//             CaptureMenu::instance->lock_window();
+//             CaptureMenu::instance->show_window();
+//             CaptureMenu::instance->reposition_window(x, y);
+//             CaptureMenu::instance->raise_window(1);
+//             CaptureMenu::instance->unlock_window();
+//         }
+//         else
+//         {
+//             CaptureMenu::instance->lock_window();
+//             CaptureMenu::instance->hide_window();
+//             CaptureMenu::instance->unlock_window();
+//         }
+//         lock_window();
+        return 1;
+    }
+
+
     if(dragging)
     {
         if(drag_accum_x == 0 &&
@@ -832,11 +937,12 @@ int MWindow::button_release_event()
         }
 
 // raise the menu
-        if(!MenuWindow::menu_window->get_hidden())
+        if(!MenuWindow::instance->get_hidden())
         {
-            MenuWindow::menu_window->lock_window();
-            MenuWindow::menu_window->raise_window(1);
-            MenuWindow::menu_window->unlock_window();
+printf("MWindow::button_press_event %d\n", __LINE__);
+            MenuWindow::instance->lock_window();
+            MenuWindow::instance->raise_window(1);
+            MenuWindow::instance->unlock_window();
         }
         dragging = 0;
         return 1;
@@ -904,14 +1010,14 @@ int MWindow::button_release_event()
     int y = get_abs_cursor_y(0);
     unlock_window();
 
-    MenuWindow::menu_window->lock_window();
-    if(x + MenuWindow::menu_window->get_w() > root_w)
+    MenuWindow::instance->lock_window();
+    if(x + MenuWindow::instance->get_w() > root_w)
     {
-        x = root_w - MenuWindow::menu_window->get_w();
+        x = root_w - MenuWindow::instance->get_w();
     }
-    if(y + MenuWindow::menu_window->get_h() > root_h)
+    if(y + MenuWindow::instance->get_h() > root_h)
     {
-        y = root_h - MenuWindow::menu_window->get_h();
+        y = root_h - MenuWindow::instance->get_h();
     }
     if(x < 0)
     {
@@ -922,7 +1028,7 @@ int MWindow::button_release_event()
     {
         y = 0;
     }
-    MenuWindow::menu_window->unlock_window();
+    MenuWindow::instance->unlock_window();
 
 
     if(load->is_running())
@@ -932,29 +1038,29 @@ int MWindow::button_release_event()
         load->unlock_gui();
     }
     else
-    if(MenuWindow::menu_window->get_hidden())
+    if(MenuWindow::instance->get_hidden())
     {
 // show the menu
 //printf("MWindow::button_release_event %d %d %d\n", __LINE__, x, y);
         
-        MenuWindow::menu_window->lock_window();
-        MenuWindow::menu_window->show_window();
+        MenuWindow::instance->lock_window();
+        MenuWindow::instance->show_window();
 // have to rehide buttons after show_window
-        MenuWindow::menu_window->update_buttons();
+        MenuWindow::instance->update_buttons();
 // have to reposition after showing
-        MenuWindow::menu_window->reposition_window(x, y);
-        MenuWindow::menu_window->raise_window(1);
-        MenuWindow::menu_window->unlock_window();
+        MenuWindow::instance->reposition_window(x, y);
+        MenuWindow::instance->raise_window(1);
+        MenuWindow::instance->unlock_window();
     }
     else
     {
 //printf("MWindow::button_release_event %d\n", __LINE__);
 // close all the windows
-        MenuWindow::menu_window->lock_window();
-        MenuWindow::menu_window->hide_windows(0);
-//        MenuWindow::menu_window->reposition_window(x, y);
-//        MenuWindow::menu_window->raise_window(1);
-        MenuWindow::menu_window->unlock_window();
+        MenuWindow::instance->lock_window();
+        MenuWindow::instance->hide_windows(0);
+//        MenuWindow::instance->reposition_window(x, y);
+//        MenuWindow::instance->raise_window(1);
+        MenuWindow::instance->unlock_window();
         exit_drawing();
     }
 

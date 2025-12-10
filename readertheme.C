@@ -1,6 +1,6 @@
 /*
  * MUSIC READER
- * Copyright (C) 2021 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2021-2025 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
 
 #include "reader.h"
 #include "readertheme.h"
-#include "readerwindow.h"
+#include "mwindow.h"
 
 
 
@@ -38,6 +38,28 @@ void ReaderTheme::initialize()
     
     BC_WindowBase::get_resources()->tooltip_bg_color = WHITE;
     margin = DP(10);
+
+    resources->usethis_button_images = 
+		resources->ok_images = new_button("ok.png",
+		"bigbutton_up.png", 
+		"bigbutton_hi.png", 
+		"bigbutton_dn.png");
+
+    resources->cancel_images = new_button("cancel.png",
+		"bigbutton_up.png", 
+		"bigbutton_hi.png", 
+		"bigbutton_dn.png");
+
+    new_button("record.png",
+		"button_up.png",
+		"button_hi.png",
+		"button_dn.png",
+        "record");
+    new_button("stop.png",
+		"button_up.png",
+		"button_hi.png",
+		"button_dn.png",
+        "stop");
     new_button("load.png",
 		"button_up.png",
 		"button_hi.png",
@@ -63,6 +85,16 @@ void ReaderTheme::initialize()
 		"button_hi.png",
 		"button_dn.png",
         "redo");
+    new_button("capture.png",
+		"button_up.png",
+		"button_hi.png",
+		"button_dn.png",
+        "capture");
+    new_button("reader.png",
+		"button_up.png",
+		"button_hi.png",
+		"button_dn.png",
+        "reader");
 
 
 
@@ -76,6 +108,11 @@ void ReaderTheme::initialize()
 		"button_hi.png",
 		"button_dn.png",
         "next_page");
+    new_button("erase1.png",
+		"button_up.png",
+		"button_hi.png",
+		"button_dn.png",
+        "erase1");
     new_toggle("erase.png",
 		"button_up.png",
 		"button_hi.png",
@@ -150,6 +187,8 @@ void ReaderTheme::initialize()
     palette_bg[1] = new_image("button_hi.png");
     palette_bg[2] = new_image("button_dn.png");
 
+
+
     for(int i = 0; i < TOTAL_COLORS; i++)
     {
         top_colors[i] = new VFrame*[3];
@@ -168,8 +207,11 @@ void ReaderTheme::initialize()
     	    overlay(bottom_colors[i][j], palette_fg, -1, -1, (j == 2));
 	    }
     }
-    
-    
+
+//     printf("ReaderTheme::initialize %d %p %p\n", 
+//         __LINE__, get_image_set("load"), get_image_set("save"));
+    resources->dirbox_margin = 0;
+	resources->filebox_margin = 0;
 }
 
 void ReaderTheme::fill_box(VFrame *dst, uint32_t color)
