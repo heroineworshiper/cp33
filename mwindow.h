@@ -35,6 +35,7 @@ public:
 
     static void init_colors();
     void create_objects();
+// reader
     void show_page(int number, int lock_it);
     void show_page_fragment(int number,
         int x1,
@@ -44,10 +45,11 @@ public:
         int lock_it);
     int export_page(const char *export_path, int number);
 
-
+// MIDI capture
     void draw_score();
     void button_press();
-    void draw_group(Staff *staff, Group *group);
+    void process_group(Staff *staff, Group *group);
+    void draw_group(Line *line, int y, Staff *staff, Group *group);
 
     int keypress_event();
     int button_release_event();

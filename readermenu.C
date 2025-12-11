@@ -441,7 +441,7 @@ int Erase::handle_event()
 
 
 
-Line::Line(int x, int y)
+DrawLine::DrawLine(int x, int y)
  : BC_Toggle(x, 
     y, 
     MWindow::instance->theme->get_image_set("line"),
@@ -450,7 +450,7 @@ Line::Line(int x, int y)
     set_tooltip("Line");
 }
 
-int Line::handle_event()
+int DrawLine::handle_event()
 {
     if(get_value())
     {
@@ -715,7 +715,7 @@ void MenuWindow::create_objects()
     x += window->get_w();
     add_tool(window = new NextPage(x, y));
     x += window->get_w();
-    add_tool(line = new Line(x, y));
+    add_tool(line = new DrawLine(x, y));
     x += line->get_w();
     add_tool(circle = new Circle(x, y));
 

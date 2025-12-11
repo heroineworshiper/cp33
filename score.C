@@ -21,10 +21,47 @@
 // Score database
 
 #include "capture.h"
+#include "mwindow.h"
 #include "score.h"
-
+#include <string.h>
 
 Score* Score::instance = 0;
+
+
+DrawObject::DrawObject(int x,
+    int y,
+    BC_Pixmap *pixmap)
+{
+    this->x = x;
+    this->y = y;
+    this->pixmap = pixmap;
+}
+
+void DrawObject::set(int x,
+    int y,
+    BC_Pixmap *pixmap)
+{
+    this->x = x;
+    this->y = y;
+    this->pixmap = pixmap;
+}
+
+int DrawObject::is_accidental()
+{
+    return (pixmap == MWindow::flat ||
+        pixmap == MWindow::sharp ||
+        pixmap == MWindow::natural);
+}
+
+int DrawObject::get_x2()
+{
+    return x + pixmap->get_w();
+}
+
+int DrawObject::get_y2()
+{
+    return y + pixmap->get_h();
+}
 
 
 Score::Score()
@@ -35,6 +72,7 @@ Score::~Score()
 {
     staves.remove_all_objects();
     beats.remove_all_objects();
+    lines.remove_all_objects();
 }
 
 void Score::test()
@@ -255,6 +293,7 @@ void Score::test()
         group->append(new Note(0, MIDDLE_F - OCTAVE));
         group = bass->groups.append(new Group(time++, IS_CHORD));
         group->append(new Note(0, MIDDLE_EF - OCTAVE));
+//printf("Score::test %d time=%d\n", __LINE__, time);
         group = bass->groups.append(new Group(time++, IS_CHORD));
         group->append(new Note(0, MIDDLE_DF - OCTAVE));
         if(staff == bass) 
@@ -337,7 +376,7 @@ void Score::delete_beat()
                     }
                 }
 
-// shift beats left
+// shift times left
                 for(int j = start; j < staff->groups.size(); j++)
                 {
                     Group *group = staff->groups.get(j);
@@ -380,11 +419,23 @@ void Score::dump_beats()
 
 Staff::Staff()
 {
+    reset();
 }
 
 Staff::~Staff()
 {
     groups.remove_all_objects();
+}
+
+void Staff::reset()
+{
+    current_cleff = TREBLE;
+    current_octave = 0;
+    current_cleff_obj = 0;
+    current_key = KEY_C;
+    beat_start = 0;
+    beat_end = 0;
+    bzero(accidentals, sizeof(int) * MAJOR_SCALE);
 }
 
 int Staff::save(FILE *fd)
@@ -456,6 +507,32 @@ void Group::dump()
         length,
         octave);
 }
+
+int Group::get_w()
+{
+    int min_x = 0x7fffffff;
+    int max_x = -0x7fffffff;
+    for(int i = 0; i < images.size(); i++)
+    {
+        int x1 = images.get(i)->x;
+        int x2 = images.get(i)->get_x2();
+        if(x1 < min_x) min_x = x1;
+        if(x2 > max_x) max_x = x2;
+    }
+    return max_x - min_x;
+}
+
+int Group::get_x()
+{
+    int min_x = 0x7fffffff;
+    for(int i = 0; i < images.size(); i++)
+    {
+        int x1 = images.get(i)->x;
+        if(x1 < min_x) min_x = x1;
+    }
+    return min_x;
+}
+
 
 // sort from lowest to highest to simplify drawing
 void Group::append(Note *note)
@@ -554,6 +631,25 @@ void Beat::reset()
     y1 = 0;
     y2 = 0;
 }
+
+
+
+
+Line::Line(double start_time, int x1, int x_pad, int staves)
+{
+    this->start_time = this->end_time = start_time;
+    this->x1 = x1;
+    this->x_pad = x_pad;
+    for(int i = 0; i < staves; i++)
+    {
+        max_y.append(LINE_SPACING * 4);
+        min_y.append(0);
+        y1.append(0);
+    }
+}
+
+
+
 
 
 

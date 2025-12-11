@@ -158,10 +158,10 @@ public:
     int handle_event();
 };
 
-class Line : public BC_Toggle
+class DrawLine : public BC_Toggle
 {
 public:
-    Line(int x, int y);
+    DrawLine(int x, int y);
     int handle_event();
 };
 
@@ -250,7 +250,7 @@ public:
     Save *save;
     Draw *draw;
     Erase *erase;
-    Line *line;
+    DrawLine *line;
     Circle *circle;
     Disc *disc;
     Box *box;

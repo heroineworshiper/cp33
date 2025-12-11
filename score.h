@@ -74,7 +74,31 @@
 // octave number of middle C
 #define MIDDLE_OCTAVE ((MIDDLE_C - MIN_C) / OCTAVE)
 
+#define MAX_STAVES 16
+#define LINE_SPACING 10
+#define CLEFF_SPACING 50 // space between cleffs
+#define STAFF_SPACING 80 // space between staffs
+#define BEAT_PAD 5
 
+
+class DrawObject
+{
+public:
+    DrawObject();
+    DrawObject(int x, int y, BC_Pixmap *pixmap);
+
+    void set(int x, int y, BC_Pixmap *pixmap);
+    int is_accidental();
+    int get_x2();
+    int get_y2();
+
+    int x;
+    int y;
+// endpoint if octave marker
+    int x2;
+// pointer to the mwindow object
+    BC_Pixmap *pixmap;
+};
 
 class Note
 {
@@ -111,6 +135,10 @@ public:
     void append(Note *note);
     int save(FILE *fd);
     void dump();
+// width of all images
+    int get_w();
+// minimum x of all images
+    int get_x();
 
 // absolute starting time in beats
     double time;
@@ -146,27 +174,21 @@ public:
     int save(FILE *fd);
     double max_beat();
     void dump();
+// reset drawing variables
+    void reset();
     ArrayList<Group*> groups;
 
 // values computed during drawing
     int current_cleff;
-    int current_key;
-// last octave marker encountered
+// groups for last octave marker, cleff, key encountered
     Group *current_octave;
+    Group *current_cleff_obj;
+    Group *current_key;
 // current accidental for each position in the octave
     int accidentals[MAJOR_SCALE];
 // range of groups to draw at the current beat, for X alignment
     int beat_start;
     int beat_end;
-// range of groups to draw in the current line
-    int line_start;
-    int line_end;
-// range of y, relative to top line
-    int min_y;
-    int max_y;
-// y of top line
-    int y1;
-// TODO: possibly a range of groups for the current measure
 };
 
 // Coordinate of each beat.  Beat covers all the staves.
@@ -185,6 +207,27 @@ public:
     int y2;
 };
 
+class Line
+{
+public:
+    Line(double start_time, int x1, int x_pad, int staves);
+
+    double start_time;
+    double end_time;
+// extents of each staff, relative to y1
+    ArrayList<int> min_y;
+    ArrayList<int> max_y;
+// abs y of top line of each staff.  Draw the side bars using this
+    ArrayList<int> y1;
+// x to subtract from the objects, for line wrapping calculations
+    int x1;
+// x to add to objects, for replicated objects
+    int x_pad;
+};
+
+
+
+
 class Score
 {
 public:
@@ -201,7 +244,9 @@ public:
 // the mane score
     static Score *instance;
     ArrayList<Staff*> staves;
+// objects computed for drawing
     ArrayList<Beat*> beats;
+    ArrayList<Line*> lines;
 };
 
 

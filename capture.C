@@ -33,6 +33,7 @@
 int current_staff = 0; // number of staff or -1 if all
 double selection_start = 3;  // beat
 double selection_end = 3;
+int selection_line = 0;
 int cursor_x1 = 0;
 int cursor_x2 = 0;
 int current_key = KEY_F;
@@ -133,54 +134,14 @@ uint32_t keysigs[] =
 
 
 
-DrawObject::DrawObject(int x,
-    int y,
-    BC_Pixmap *pixmap)
-{
-    this->x = x;
-    this->y = y;
-    this->pixmap = pixmap;
-}
-
-void DrawObject::set(int x,
-    int y,
-    BC_Pixmap *pixmap)
-{
-    this->x = x;
-    this->y = y;
-    this->pixmap = pixmap;
-}
-
-int DrawObject::is_accidental()
-{
-    return (pixmap == MWindow::flat ||
-        pixmap == MWindow::sharp ||
-        pixmap == MWindow::natural);
-}
-
-int DrawObject::get_x2()
-{
-    return x + pixmap->get_w();
-}
-
-int DrawObject::get_y2()
-{
-    return y + pixmap->get_h();
-}
 
 
-
-
-#define LINE_SPACING 10
-#define CLEFF_SPACING 50 // space between cleffs
-#define STAFF_SPACING 80 // space between staffs
-#define BEAT_PAD 5
 // always centered around X=0
-void MWindow::draw_group(Staff *staff, Group *group)
+void MWindow::process_group(Staff *staff, Group *group)
 {
     group->images.remove_all_objects();
 
-     int note_w = quarter->get_w();
+    int note_w = quarter->get_w();
     int note_h = quarter->get_h();
     int ledger_w = ledger->get_w();
     switch(group->type)
@@ -188,6 +149,7 @@ void MWindow::draw_group(Staff *staff, Group *group)
         case IS_CLEFF:
         {
             staff->current_cleff = group->cleff;
+            staff->current_cleff_obj = group;
             if(staff->current_cleff == TREBLE)
                 group->images.append(new DrawObject(-treble->get_w() / 2,
                     LINE_SPACING * 2 - treble->get_h() / 2,
@@ -203,6 +165,7 @@ void MWindow::draw_group(Staff *staff, Group *group)
         case IS_KEY:
         {
             BC_Pixmap *pixmap;
+            staff->current_key = group;
             current_key = group->key;
 // reset the accidental table
 //                 int accidental;
@@ -316,7 +279,7 @@ void MWindow::draw_group(Staff *staff, Group *group)
                 y,
                 octave));
             group->advance = BEAT_PAD;
-// printf("MWindow::draw_group %d current_octave=%d octave_remane=%f\n", 
+// printf("MWindow::process_group %d current_octave=%d octave_remane=%f\n", 
 // __LINE__,
 // staff->current_octave,
 // staff->octave_remane);
@@ -337,7 +300,7 @@ void MWindow::draw_group(Staff *staff, Group *group)
                 int scale_position2 = ((note->pitch - MIN_C) % OCTAVE);
 // convert the MIDI code to a position & octave in the current scale
                 int scale_position = scale_position2 - current_key;
-//printf("MWindow::draw_group %d scale_position2=%d scale_position=%d octave=%d\n", 
+//printf("MWindow::process_group %d scale_position2=%d scale_position=%d octave=%d\n", 
 //__LINE__, scale_position2, scale_position, octave);
 
                 while(scale_position < 0)
@@ -345,7 +308,7 @@ void MWindow::draw_group(Staff *staff, Group *group)
                     scale_position += OCTAVE;
                     octave--;
                 }
-//printf("MWindow::draw_group %d scale_position=%d octave=%d\n", 
+//printf("MWindow::process_group %d scale_position=%d octave=%d\n", 
 //__LINE__, scale_position, octave);
 
 
@@ -433,7 +396,7 @@ void MWindow::draw_group(Staff *staff, Group *group)
 // position in the staff is the current octave start + C MAJ scale position
                 int staff_position = cmaj_position +
                     (octave - MIDDLE_OCTAVE) * MAJOR_SCALE;
-//printf("MWindow::draw_group %d pitch=%d scale_position=%d major_scale_position=%d cmaj_position=%d staff_position=%d\n", 
+//printf("MWindow::process_group %d pitch=%d scale_position=%d major_scale_position=%d cmaj_position=%d staff_position=%d\n", 
 //__LINE__, note->pitch, scale_position, major_scale_position, cmaj_position, staff_position);
 
 // convert to the position in the accidental table
@@ -446,7 +409,7 @@ void MWindow::draw_group(Staff *staff, Group *group)
 // update table of accidentals
                 if(need_accidental != staff->accidentals[cmaj_position])
                 {
-//printf("MWindow::draw_group %d accidentals[cmaj_position]=%d need_accidental=%d\n", 
+//printf("MWindow::process_group %d accidentals[cmaj_position]=%d need_accidental=%d\n", 
 //__LINE__, accidentals[cmaj_position], need_accidental);
                     staff->accidentals[cmaj_position] = need_accidental;
 // cancel an accidental based on the position in the current scale
@@ -490,14 +453,14 @@ void MWindow::draw_group(Staff *staff, Group *group)
                         x < object->x + quarter->get_w() && 
                         y + quarter->get_h() > object->y)
                     {
-// printf("MWindow::draw_group %d %d %d %d\n",
+// printf("MWindow::process_group %d %d %d %d\n",
 // __LINE__, y + quarter->get_h(), object->y, object->x + quarter->get_w());
                         x = object->x + quarter->get_w();
                         break;
                     }
                 }
 
-// printf("MWindow::draw_group %d x=%d y=%d\n", 
+// printf("MWindow::process_group %d x=%d y=%d\n", 
 // __LINE__, x, y);
                 group->images.append(new DrawObject(x, y, quarter));
 
@@ -516,10 +479,10 @@ void MWindow::draw_group(Staff *staff, Group *group)
 // ledger lines below staff
                 if(center_y > LINE_SPACING * 4)
                 {
-//printf("MWindow::draw_group %d y=%d %d\n", __LINE__, y, y1 + LINE_SPACING * 4);
+//printf("MWindow::process_group %d y=%d %d\n", __LINE__, y, y1 + LINE_SPACING * 4);
                     for(int k = LINE_SPACING * 5; k <= center_y; k += LINE_SPACING)
                     {
-//printf("MWindow::draw_group %d k=%d\n", __LINE__, k);
+//printf("MWindow::process_group %d k=%d\n", __LINE__, k);
                         group->images.append(new DrawObject(x + note_w / 2 - ledger_w / 2,
                             k,
                             ledger));
@@ -634,13 +597,64 @@ void MWindow::draw_group(Staff *staff, Group *group)
     }
 }
 
+void MWindow::draw_group(Line *line, int y, Staff *staff, Group *group)
+{
+    for(int k = 0; k < group->images.size(); k++)
+    {
+        DrawObject *image = group->images.get(k);
+        BC_Window::draw_pixmap(image->pixmap,
+            image->x - line->x1 + line->x_pad,
+            image->y + y);
+    }
+
+    switch(group->type)
+    {
+        case IS_CLEFF:
+            staff->current_cleff = group->cleff;
+            staff->current_cleff_obj = group;
+            break;
+        case IS_KEY:
+            staff->current_key = group;
+            break;
+        case IS_OCTAVE:
+        {
+            staff->current_octave = group;
+// draw octave line
+            DrawObject *image = group->images.get(0);
+            int y2 = image->y + y + image->pixmap->get_h() / 2;
+            int x1 = image->x - line->x1 + line->x_pad + image->pixmap->get_w();
+            int x2 = image->x2 - line->x1;
+            int direction = -1;
+            if(group->octave > 0) direction = 1;
+            BC_Window::set_line_dashes(2);
+            BC_Window::set_line_width(2);
+            BC_Window::draw_line(
+                x1,
+                y2,
+                x2,
+                y2);
+            BC_Window::draw_line(
+                x2,
+                y2,
+                x2,
+                y2 + 5 * direction);
+            BC_Window::set_line_dashes(0);
+            BC_Window::set_line_width(1);
+            break;
+        }
+    }
+}
+
+
 void MWindow::draw_score()
 {
     Score *score = Score::instance;
     int margin = 5;
     char temp[BCTEXTLEN];
+// reset the temporaries
     score->beats.remove_all_objects();
-// TODO: rewind & set the Y for the staff in the beats
+    score->lines.remove_all_objects();
+// 1st beat
     score->beats.append(new Beat(0, 0));
 
     lock_window();
@@ -649,7 +663,7 @@ void MWindow::draw_score()
     draw_box(0, 0, root_w, root_h, 0);
     set_color(BLACK);
 
-
+// draw the title
     if(score_path[0] == 0)
         sprintf(temp, "Untitled");
     else
@@ -658,25 +672,31 @@ void MWindow::draw_score()
     BC_Window::draw_text(margin, 
         margin + BC_Window::get_text_ascent(SMALLFONT), temp);
 
+
+// start of current line
+    int y1 = 0;
+
+
 // pass 1: determine the extents
     double current_time = 0;
-// current position on an infinitely wide page
-    int x = BEAT_PAD;
+    double prev_time = 0;
+
+    Line *line = 0;
+    int new_line = 1;
+// current position relative to the infinitely wide line
+    int x = 0;
+    int prev_x = x;
+// extents of the line
+    int x1 = margin;
+    int x2 = root_w - margin;
+// available pixels in the current line
+    int line_w = x2 - x1;
 
 // initialize the staves
     for(int i = 0; i < score->staves.size(); i++)
     {
         Staff *staff = score->staves.get(i);
-        staff->current_cleff = TREBLE;
-        staff->current_key = KEY_C;
-        staff->current_octave = 0;
-        staff->line_start = 0;
-        staff->line_end = 0;
-        staff->beat_start = 0;
-        staff->beat_end = 0;
-        staff->max_y = LINE_SPACING * 4;
-        staff->min_y = 0;
-        bzero(staff->accidentals, sizeof(int) * MAJOR_SCALE);
+        staff->reset();
     }
 
     cursor_x1 = cursor_x2 = -1;
@@ -687,6 +707,45 @@ void MWindow::draw_score()
     {
         double next_time = 0x7fffffff;
         int got_next = 0;
+
+        if(new_line)
+        {
+            new_line = 0;
+// adjust the start & end of the line after line 1
+            int cleff_w = 0;
+            int key_w = 0;
+            if(score->lines.size() > 0)
+            {
+                x1 = margin;
+                x2 = root_w - margin;
+
+                for(int i = 0; i < score->staves.size(); i++)
+                {
+                    Staff *staff = score->staves.get(i);
+                    if(staff->current_cleff_obj && 
+                        staff->current_cleff_obj->get_w() > cleff_w)
+                        cleff_w = staff->current_cleff_obj->get_w() + 
+                            staff->current_cleff_obj->advance;
+                    if(staff->current_key &&
+                        staff->current_key->get_w() > key_w)
+                        key_w = staff->current_key->get_w() + 
+                            staff->current_key->advance;
+                }
+                line_w = x2 - x1 - cleff_w - key_w;
+            }
+
+// assume the previous beat was moved to the next line.  Use its X & time.
+            line = score->lines.append(new Line(
+                prev_time, 
+                prev_x, 
+                BEAT_PAD + cleff_w + key_w,
+                score->staves.size()));
+
+// shift the line right by the repeated objects
+
+// printf("MWindow::draw_score %d lines=%d current_time=%f\n",
+// __LINE__, score->lines.size(), current_time);
+        }
 
 // draw all the objects at the current time
         for(int i = 0; i < score->staves.size(); i++)
@@ -699,7 +758,7 @@ void MWindow::draw_score()
                 if(group->time == current_time)
                 {
 // draw it
-                    draw_group(staff, group);
+                    process_group(staff, group);
                     staff->beat_end = j + 1;
                 }
                 else
@@ -730,10 +789,10 @@ void MWindow::draw_score()
                         min_x = image->x;
                     if(image->get_x2() > max_x)
                         max_x = image->get_x2();
-                    if(image->y < staff->min_y)
-                        staff->min_y = image->y;
-                    if(image->get_y2() > staff->max_y)
-                        staff->max_y = image->get_y2();
+                    if(image->y < line->min_y.get(i))
+                        line->min_y.set(i, image->y);
+                    if(image->get_y2() > line->max_y.get(i))
+                        line->max_y.set(i, image->get_y2());
                 }
 
                 if(group->advance > max_pad) max_pad = group->advance;
@@ -779,16 +838,66 @@ void MWindow::draw_score()
 
 
 // advance X
+        prev_x = x;
         x += (max_x - min_x) + max_pad;
+
+// if we hit the end of the line, end it before the current beat & 
+// start a new line
+        if(x - line->x1 >= line_w || !got_next)
+        {
+// printf("MWindow::draw_score %d x=%d line->x1=%d line_w=%d current_time=%f\n",
+// __LINE__, x, line->x1, line_w, current_time);
+
+            line->end_time = current_time;
+
+// get y of each staff
+            for(int i = 0; i < score->staves.size(); i++)
+            {
+                Staff *staff = score->staves.get(i);
+
+// space above staff
+                if(i == 0)
+                {
+                    int top = -line->min_y.get(i);
+                    if(top > STAFF_SPACING) 
+                        y1 += top;
+                    else
+                        y1 += STAFF_SPACING;
+                }
+                else
+                {
+// gap between staffs
+                    int gap = line->max_y.get(i - 1) - 
+                        LINE_SPACING * 4 + 
+                        -line->min_y.get(i);
+                    if(gap > CLEFF_SPACING)
+                        y1 += gap;
+                    else
+                        y1 += CLEFF_SPACING;
+                }
+
+                line->y1.set(i, y1);
+                y1 += 4 * LINE_SPACING;
+            }
+
+            new_line = 1;
+        }
 
 // if we hit the end of the score, quit
         if(!got_next)
         {
+// printf("MWindow::draw_score %d x=%d line->x1=%d line_w=%d current_time=%f\n",
+// __LINE__, x, line->x1, line_w, current_time);
             current_time = score->max_beat();
+            line->end_time = current_time;
+
+            if(line->start_time == line->end_time)
+                score->lines.remove_object();
             break;
         }
 
 // advance the time to the next beat in all the staves
+        prev_time = current_time;
         current_time = next_time;
     }
 
@@ -797,7 +906,11 @@ void MWindow::draw_score()
     {
         cursor_x1 = x;
         cursor_x2 = x;
+        selection_start = selection_end = prev_time;
+        selection_line = score->lines.size() - 1;
     }
+//printf("MWindow::draw_score %d cursor_x1=%d cursor_x2=%d\n",
+//__LINE__, cursor_x1, cursor_x2);
     if(cursor_x2 < cursor_x1 + 2) cursor_x2 += 2;
 // end of score
     score->beats.append(new Beat(current_time, x));
@@ -810,167 +923,145 @@ void MWindow::draw_score()
 // the cursor extents for the current line
     int cursor_y1 = 0;
     int cursor_y2 = 0;
-// start of current line
-    int y1 = 0;
-    int x1 = margin;
-// end of line
-    int x2 = root_w - margin;
-    int new_line = 1;
-    
 
+// reset the staves
     for(int i = 0; i < score->staves.size(); i++)
     {
         Staff *staff = score->staves.get(i);
-        staff->beat_start = 0;
-        staff->beat_end = 0;
+        staff->reset();;
     }
 
-    while(1)
+//printf("MWindow::draw_score %d lines=%d\n", __LINE__, score->lines.size());
+    for(int line_n = 0; line_n < score->lines.size(); line_n++)
     {
-//printf("MWindow::draw_score %d\n", __LINE__);
-// draw new line
-        if(new_line)
+        line = score->lines.get(line_n);
+        current_time = line->start_time;
+//printf("MWindow::draw_score %d line=%d current_time=%f\n",
+//__LINE__, line_n, current_time);
+
+// draw the cursor
+        if(selection_end >= line->start_time &&
+            selection_start <= line->end_time &&
+            selection_line == line_n)
         {
-            new_line = 0;
-
-            int y = y1;
-
-// Y range of the lines
-            int min_y;
-            int max_y;
-            for(int i = 0; i < score->staves.size(); i++)
-            {
-                Staff *staff = score->staves.get(i);
-
-// space above staff
-                if(i == 0)
-                {
-                    if(-staff->min_y > STAFF_SPACING) 
-                        y += -staff->min_y;
-                    else
-                        y += STAFF_SPACING;
-                    min_y = y;
-                }
-                else
-                {
-                    Staff *staff2 = score->staves.get(i - 1);
-                    if(staff2->max_y - LINE_SPACING * 4 + -staff->min_y > CLEFF_SPACING)
-                        y += staff2->max_y - LINE_SPACING * 4 + -staff->min_y;
-                    else
-                        y += CLEFF_SPACING;
-                }
-
-                staff->y1 = y;
-                y += 4 * LINE_SPACING;
-// bottom of lines
-                max_y = y;
-            }
-
 // single staff
             if(current_staff >= 0 && current_staff < score->staves.size())
             {
-                Staff *staff = score->staves.get(current_staff);
-                cursor_y1 = staff->y1 + staff->min_y;
-                cursor_y2 = staff->y1 + staff->max_y;
+                cursor_y1 = line->y1.get(current_staff) + line->min_y.get(current_staff);
+                cursor_y2 = line->y1.get(current_staff) + line->max_y.get(current_staff);
             }
             else
             if(current_staff < 0 && score->staves.size() > 0)
             {
-                Staff *staff1 = score->staves.get(0);
-                Staff *staff2 = score->staves.get(score->staves.size() - 1);
-                cursor_y1 = staff1->y1 + staff1->min_y;
-                cursor_y2 = staff2->y1 + staff2->max_y;
+                int last = score->staves.size() - 1;
+                cursor_y1 = line->y1.get(0) + line->min_y.get(0);
+                cursor_y2 = line->y1.get(last) + line->max_y.get(last);
             }
 
-// draw cursor
             BC_Window::set_color(BLUE);
-            BC_Window::draw_box(cursor_x1, 
+            BC_Window::draw_box(cursor_x1 - line->x1 + line->x_pad, 
                 cursor_y1, 
                 cursor_x2 - cursor_x1, 
                 cursor_y2 - cursor_y1);
             BC_Window::set_color(BLACK);
-
-// draw staff lines
-            for(int i = 0; i < score->staves.size(); i++)
-            {
-                Staff *staff = score->staves.get(i);
-                for(int j = 0; j < 5; j++)
-                {
-                    BC_Window::draw_line(x1, 
-                        staff->y1 + j * LINE_SPACING, 
-                        x2, 
-                        staff->y1 + j * LINE_SPACING);
-                }
-            }
-
-// side bars
-            BC_Window::draw_line(x1, min_y, x1, max_y);
-            BC_Window::draw_line(x2, min_y, x2, max_y);
         }
 
-        double next_time = 0x7fffffff;
-        int got_next = 0;
-// draw all the objects at the current time
+//printf("MWindow::draw_score %d line_n=%d %f %f\n", 
+//__LINE__, line_n, line->start_time, line->end_time);
+// side bars
+        int last = score->staves.size() - 1;
+        int min_y = line->y1.get(0);
+        int max_y = line->y1.get(last) + 4 * LINE_SPACING;
+        BC_Window::draw_line(x1, min_y, x1, max_y);
+        BC_Window::draw_line(x2, min_y, x2, max_y);
+
+// draw staff lines
         for(int i = 0; i < score->staves.size(); i++)
         {
             Staff *staff = score->staves.get(i);
-            int y = staff->y1;
-
-            staff->beat_start = staff->beat_end;
-            for(int j = staff->beat_start; j < staff->groups.size(); j++)
+            for(int j = 0; j < 5; j++)
             {
-                Group *group = staff->groups.get(j);
-                if(group->time == current_time)
+                BC_Window::draw_line(x1, 
+                    line->y1.get(i) + j * LINE_SPACING, 
+                    x2, 
+                    line->y1.get(i) + j * LINE_SPACING);
+            }
+
+// replicate cleffs, key signatures
+            if(line_n > 0)
+            {
+                x = x1;
+                if(staff->current_cleff_obj)
                 {
-// draw it
+                    Group *group = staff->current_cleff_obj;
+                    int min_x = group->get_x();
+                    DrawObject *image = group->images.get(0);
+// printf("MWindow::draw_score %d x=%d image->x=%d min_x=%d\n", 
+// __LINE__, x, image->x, min_x);
+                    BC_Window::draw_pixmap(image->pixmap,
+                        x + image->x - min_x,
+                        image->y + line->y1.get(i));
+                    x = x1 + group->get_w() + BEAT_PAD;
+                }
+
+                if(staff->current_key)
+                {
+                    Group *group = staff->current_key;
+                    int min_x = group->get_x();
                     for(int k = 0; k < group->images.size(); k++)
                     {
                         DrawObject *image = group->images.get(k);
                         BC_Window::draw_pixmap(image->pixmap,
-                            image->x + x1,
-                            image->y + y);
+                            x + image->x - min_x,
+                            image->y + line->y1.get(i));
                     }
-
-// draw octave line
-                    if(group->type == IS_OCTAVE)
-                    {
-                        DrawObject *image = group->images.get(0);
-                        int y2 = image->y + y + image->pixmap->get_h() / 2;
-                        int x2 = image->x2 + x1;
-                        int direction = -1;
-                        if(group->octave > 0) direction = 1;
-                        BC_Window::set_line_dashes(2);
-                        BC_Window::set_line_width(2);
-                        BC_Window::draw_line(
-                            image->x + x1 + image->pixmap->get_w(),
-                            y2,
-                            x2,
-                            y2);
-                        BC_Window::draw_line(
-                            x2,
-                            y2,
-                            x2,
-                            y2 + 5 * direction);
-                        BC_Window::set_line_dashes(0);
-                        BC_Window::set_line_width(1);
-                    }
-
-                    staff->beat_end = j + 1;
-                }
-                else
-// future beat
-                if(group->time > current_time &&
-                    next_time > group->time)
-                {
-                    next_time = group->time;
-                    got_next = 1;
                 }
             }
         }
 
-        if(!got_next) break;
-// advance the time to the next beat in all the staves
-        current_time = next_time;
+
+//printf("MWindow::draw_score %d start_time=%f end_time=%f current_time=%f x1=%d\n",
+//__LINE__, line->start_time, line->end_time, current_time, line->x1);
+
+        while(current_time < line->end_time)
+        {
+            double next_time = 0x7fffffff;
+            int got_next = 0;
+// draw all the objects at the current time
+            for(int i = 0; i < score->staves.size(); i++)
+            {
+                Staff *staff = score->staves.get(i);
+                int y = line->y1.get(i);
+
+// array range used by the current beat
+                staff->beat_start = staff->beat_end;
+                for(int j = staff->beat_start; j < staff->groups.size(); j++)
+                {
+                    Group *group = staff->groups.get(j);
+
+                    if(group->time == current_time)
+                    {
+    // draw it
+//printf("MWindow::draw_score %d line=%d %f current_time=%f\n",
+//__LINE__, line_n, line->end_time, current_time);
+                        draw_group(line, y, staff, group);
+                        staff->beat_end = j + 1;
+                    }
+                    else
+    // future beat
+                    if(group->time > current_time &&
+                        next_time > group->time)
+                    {
+                        next_time = group->time;
+                        got_next = 1;
+                    }
+                }
+            }
+
+            if(!got_next) break;
+    // advance the time to the next beat in all the staves
+            current_time = next_time;
+        }
     }
 
 
@@ -983,28 +1074,44 @@ void MWindow::draw_score()
 void MWindow::button_press()
 {
     Score *score = Score::instance;
-    for(int i = 0; i < score->staves.size(); i++)
+    for(int line_n = 0; line_n < score->lines.size(); line_n++)
     {
-        Staff *staff = score->staves.get(i);
-        if(get_relative_cursor_y() >= staff->y1 + staff->min_y &&
-            get_relative_cursor_y() < staff->y1 + staff->max_y)
+        Line *line = score->lines.get(line_n);
+        for(int i = 0; i < score->staves.size(); i++)
         {
-            current_staff = i;
-            for(int j = score->beats.size() - 1; j >= 0; j--)
+            Staff *staff = score->staves.get(i);
+            if(get_relative_cursor_y() >= line->y1.get(i) + line->min_y.get(i) &&
+                get_relative_cursor_y() < line->y1.get(i) + line->max_y.get(i))
             {
-                Beat *beat = score->beats.get(j);
-                if(beat->x < get_relative_cursor_x())
+                current_staff = i;
+                int got_it = 0;
+                for(int j = score->beats.size() - 1; j >= 0; j--)
                 {
-                    selection_start = selection_end = beat->time;
-                    break;
-                }
-            }
+                    Beat *beat = score->beats.get(j);
+                    int x1 = beat->x - line->x1 + line->x_pad;
 
-//                         double max_beat = staff->max_beat();
-//                         if(selection_start > max_beat)
-//                             selection_start = max_beat;
-            selection_end = selection_start;
-            break;
+// cursor right of the current beat
+                    if(x1 < get_relative_cursor_x() ||  
+// cursor left of the 1st original beat in the line
+                        beat->time == line->start_time)
+                    {
+                        selection_start = selection_end = beat->time;
+                        selection_line = line_n;
+                        got_it = 1;
+                        break;
+                    }
+                }
+
+//printf("MWindow::button_press %d %d %f\n", __LINE__, got_it, selection_start);
+//                 if(!got_it)
+//                 {
+//                     double max_beat = staff->max_beat();
+//                     selection_start = max_beat;
+//                 }
+
+                selection_end = selection_start;
+                break;
+            }
         }
     }
 }

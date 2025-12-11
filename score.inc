@@ -28,6 +28,7 @@ class Score;
 class Staff;
 class Group;
 class Note;
+class Line;
 
 
 

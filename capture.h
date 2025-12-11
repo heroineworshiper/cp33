@@ -43,26 +43,6 @@ extern void next_beat();
 extern void prev_staff();
 extern void next_staff();
 
-class DrawObject
-{
-public:
-    DrawObject();
-    DrawObject(int x, int y, BC_Pixmap *pixmap);
-
-    void set(int x, int y, BC_Pixmap *pixmap);
-    int is_accidental();
-    int get_x2();
-    int get_y2();
-
-    int x;
-    int y;
-// endpoint if octave marker
-    int x2;
-// pointer to the mwindow object
-    BC_Pixmap *pixmap;
-};
-
-
 
 #endif
 
