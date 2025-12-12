@@ -45,11 +45,6 @@ public:
         int lock_it);
     int export_page(const char *export_path, int number);
 
-// MIDI capture
-    void draw_score();
-    void button_press();
-    void process_group(Staff *staff, Group *group);
-    void draw_group(Line *line, int y, Staff *staff, Group *group);
 
     int keypress_event();
     int button_release_event();
@@ -175,15 +170,6 @@ public:
     int drag_accum_x;
     int drag_accum_y;
     int dragging;
-
-    static BC_Pixmap *sharp;
-    static BC_Pixmap *flat;
-    static BC_Pixmap *natural;
-    BC_Pixmap *quarter;
-    BC_Pixmap *ledger;
-    BC_Pixmap *treble;
-    BC_Pixmap *bass;
-    BC_Pixmap *octave;
 };
 
 

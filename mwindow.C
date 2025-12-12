@@ -33,9 +33,6 @@
 
 
 MWindow* MWindow::instance = 0;
-BC_Pixmap* MWindow::sharp = 0;
-BC_Pixmap* MWindow::flat = 0;
-BC_Pixmap* MWindow::natural = 0;
 
 
 const uint32_t MWindow::top_colors[TOTAL_COLORS] = 
@@ -162,14 +159,6 @@ void MWindow::create_objects()
             undo_after[i] = new VFrame(ROOT_W, ROOT_H, BC_A8);
         }
 
-        quarter = new BC_Pixmap(this, theme->new_image("quarter.png"), PIXMAP_ALPHA);
-        sharp = new BC_Pixmap(this, theme->new_image("sharp.png"), PIXMAP_ALPHA);
-        flat = new BC_Pixmap(this, theme->new_image("flat.png"), PIXMAP_ALPHA);
-        natural = new BC_Pixmap(this, theme->new_image("natural.png"), PIXMAP_ALPHA);
-        ledger = new BC_Pixmap(this, theme->new_image("ledger.png"), PIXMAP_ALPHA);
-        treble = new BC_Pixmap(this, theme->new_image("treble.png"), PIXMAP_ALPHA);
-        bass = new BC_Pixmap(this, theme->new_image("bass.png"), PIXMAP_ALPHA);
-        octave = new BC_Pixmap(this, theme->new_image("8va.png"), PIXMAP_ALPHA);
     }
 
 // draw bitmaps to the foreground/win instead of the back buffer/pixmap
@@ -321,6 +310,11 @@ void MWindow::push_undo_after()
 
 void MWindow::pop_undo()
 {
+    if(mode == CAPTURE_MODE)
+    {
+        Capture::instance->pop_undo();
+    }
+    else
     if(current_page < pages.size())
     {
         Page *page = pages.get(current_page);
@@ -336,6 +330,11 @@ void MWindow::pop_undo()
 
 void MWindow::pop_redo()
 {
+    if(mode == CAPTURE_MODE)
+    {
+        Capture::instance->pop_redo();
+    }
+    else
     if(current_page < pages.size())
     {
         Page *page = pages.get(current_page);
@@ -798,8 +797,8 @@ int MWindow::button_press_event()
             CaptureMenu::instance->unlock_window();
             lock_window();
         }
-        button_press();
-        draw_score();
+        Capture::instance->handle_button_press();
+        Capture::instance->draw_score();
         return 1;
     }
 

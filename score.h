@@ -89,7 +89,9 @@ public:
 
     void set(int x, int y, BC_Pixmap *pixmap);
     int is_accidental();
+// maximum X of all images
     int get_x2();
+// maximum Y of all images
     int get_y2();
 
     int x;
@@ -181,7 +183,7 @@ public:
 // values computed during drawing
     int current_cleff;
 // groups for last octave marker, cleff, key encountered
-    Group *current_octave;
+    Group *current_8va;
     Group *current_cleff_obj;
     Group *current_key;
 // current accidental for each position in the octave

@@ -25,6 +25,7 @@
 
 #include "capture.h"
 #include "mwindow.h"
+#include "readertheme.h"
 #include "score.h"
 #include <stdint.h>
 #include <string.h>
@@ -126,9 +127,45 @@ uint32_t keysigs[] =
 
 
 
+Capture* Capture::instance = 0;
+
+Capture::Capture()
+{
+}
+
+void Capture::create_objects()
+{
+    mwindow = MWindow::instance;
+    theme = mwindow->theme;
+
+    for(int i = 0; i < UNDO_LEVELS; i++)
+    {
+        undo_before[i] = new CaptureUndo();
+        undo_after[i] = new CaptureUndo();
+    }
+
+    quarter = new BC_Pixmap(mwindow, theme->new_image("quarter.png"), PIXMAP_ALPHA);
+    sharp = new BC_Pixmap(mwindow, theme->new_image("sharp.png"), PIXMAP_ALPHA);
+    flat = new BC_Pixmap(mwindow, theme->new_image("flat.png"), PIXMAP_ALPHA);
+    natural = new BC_Pixmap(mwindow, theme->new_image("natural.png"), PIXMAP_ALPHA);
+    ledger = new BC_Pixmap(mwindow, theme->new_image("ledger.png"), PIXMAP_ALPHA);
+    treble = new BC_Pixmap(mwindow, theme->new_image("treble.png"), PIXMAP_ALPHA);
+    bass = new BC_Pixmap(mwindow, theme->new_image("bass.png"), PIXMAP_ALPHA);
+    octave = new BC_Pixmap(mwindow, theme->new_image("8va.png"), PIXMAP_ALPHA);
+}
 
 
 
+
+CaptureUndo::CaptureUndo()
+{
+    score = new Score;
+}
+
+CaptureUndo::~CaptureUndo()
+{
+    delete score;
+}
 
 
 
@@ -137,7 +174,7 @@ uint32_t keysigs[] =
 
 
 // always centered around X=0
-void MWindow::process_group(Staff *staff, Group *group)
+void Capture::process_group(Staff *staff, Group *group)
 {
     group->images.remove_all_objects();
 
@@ -268,7 +305,7 @@ void MWindow::process_group(Staff *staff, Group *group)
 
         case IS_OCTAVE:
         {
-            staff->current_octave = group;
+            staff->current_8va = group;
             int y;
             if(group->octave < 0)
                 y = LINE_SPACING * 4;
@@ -279,9 +316,9 @@ void MWindow::process_group(Staff *staff, Group *group)
                 y,
                 octave));
             group->advance = BEAT_PAD;
-// printf("MWindow::process_group %d current_octave=%d octave_remane=%f\n", 
+// printf("MWindow::process_group %d current_8va=%d octave_remane=%f\n", 
 // __LINE__,
-// staff->current_octave,
+// staff->current_8va,
 // staff->octave_remane);
             break;
         }
@@ -289,7 +326,7 @@ void MWindow::process_group(Staff *staff, Group *group)
         case IS_CHORD:
         default:
         {
-            int have_octave_marker = 0;
+            int have_8va_marker = 0;
             for(int j = 0; j < group->notes.size(); j++)
             {
                 Note *note = group->notes.get(j);
@@ -313,11 +350,11 @@ void MWindow::process_group(Staff *staff, Group *group)
 
 
 // shift for 8va
-                if(staff->current_octave &&
-                    staff->current_octave->time + staff->current_octave->length > group->time)
+                if(staff->current_8va &&
+                    staff->current_8va->time + staff->current_8va->length > group->time)
                 {
-                    have_octave_marker = 1;
-                    octave -= staff->current_octave->octave;
+                    have_8va_marker = 1;
+                    octave -= staff->current_8va->octave;
                 }
 
 // compute the accidental
@@ -556,14 +593,14 @@ void MWindow::process_group(Staff *staff, Group *group)
             }
 
 // shift octave marker
-            if(have_octave_marker)
+            if(have_8va_marker)
             {
-                DrawObject *octave_marker = staff->current_octave->images.get(0);
+                DrawObject *octave_marker = staff->current_8va->images.get(0);
                 for(int j = 0; j < group->images.size(); j++)
                 {
                     DrawObject *object = group->images.get(j);
                     
-                    if(staff->current_octave->octave < 0)
+                    if(staff->current_8va->octave < 0)
                     {
                         int y2 = object->get_y2();
                         if(y2 > octave_marker->y)
@@ -597,12 +634,12 @@ void MWindow::process_group(Staff *staff, Group *group)
     }
 }
 
-void MWindow::draw_group(Line *line, int y, Staff *staff, Group *group)
+void Capture::draw_group(Line *line, int y, Staff *staff, Group *group)
 {
     for(int k = 0; k < group->images.size(); k++)
     {
         DrawObject *image = group->images.get(k);
-        BC_Window::draw_pixmap(image->pixmap,
+        mwindow->draw_pixmap(image->pixmap,
             image->x - line->x1 + line->x_pad,
             image->y + y);
     }
@@ -618,35 +655,41 @@ void MWindow::draw_group(Line *line, int y, Staff *staff, Group *group)
             break;
         case IS_OCTAVE:
         {
-            staff->current_octave = group;
+            staff->current_8va = group;
 // draw octave line
             DrawObject *image = group->images.get(0);
             int y2 = image->y + y + image->pixmap->get_h() / 2;
             int x1 = image->x - line->x1 + line->x_pad + image->pixmap->get_w();
             int x2 = image->x2 - line->x1;
-            int direction = -1;
-            if(group->octave > 0) direction = 1;
-            BC_Window::set_line_dashes(2);
-            BC_Window::set_line_width(2);
-            BC_Window::draw_line(
-                x1,
-                y2,
-                x2,
-                y2);
-            BC_Window::draw_line(
-                x2,
-                y2,
-                x2,
-                y2 + 5 * direction);
-            BC_Window::set_line_dashes(0);
-            BC_Window::set_line_width(1);
+            
+            draw_8va_line(group, x1, x2, y2);
             break;
         }
     }
 }
 
+void Capture::draw_8va_line(Group *group, int x1, int x2, int y2)
+{
+    int direction = -1;
+    if(group->octave > 0) direction = 1;
+    mwindow->set_line_dashes(2);
+    mwindow->set_line_width(2);
+    mwindow->BC_Window::draw_line(
+        x1,
+        y2,
+        x2,
+        y2);
+    mwindow->BC_Window::draw_line(
+        x2,
+        y2,
+        x2,
+        y2 + 5 * direction);
+    mwindow->set_line_dashes(0);
+    mwindow->set_line_width(1);
+}
 
-void MWindow::draw_score()
+
+void Capture::draw_score()
 {
     Score *score = Score::instance;
     int margin = 5;
@@ -657,20 +700,20 @@ void MWindow::draw_score()
 // 1st beat
     score->beats.append(new Beat(0, 0));
 
-    lock_window();
+    mwindow->lock_window();
 // finale background color
-    set_color(0xfdfcf5);
-    draw_box(0, 0, root_w, root_h, 0);
-    set_color(BLACK);
+    mwindow->set_color(0xfdfcf5);
+    mwindow->draw_box(0, 0, mwindow->root_w, mwindow->root_h, 0);
+    mwindow->set_color(BLACK);
 
 // draw the title
     if(score_path[0] == 0)
         sprintf(temp, "Untitled");
     else
         strcpy(temp, score_path);
-    BC_Window::set_font(SMALLFONT);
-    BC_Window::draw_text(margin, 
-        margin + BC_Window::get_text_ascent(SMALLFONT), temp);
+    mwindow->set_font(SMALLFONT);
+    mwindow->draw_text(margin, 
+        margin + mwindow->get_text_ascent(SMALLFONT), temp);
 
 
 // start of current line
@@ -688,7 +731,7 @@ void MWindow::draw_score()
     int prev_x = x;
 // extents of the line
     int x1 = margin;
-    int x2 = root_w - margin;
+    int x2 = mwindow->root_w - margin;
 // available pixels in the current line
     int line_w = x2 - x1;
 
@@ -717,7 +760,7 @@ void MWindow::draw_score()
             if(score->lines.size() > 0)
             {
                 x1 = margin;
-                x2 = root_w - margin;
+                x2 = mwindow->root_w - margin;
 
                 for(int i = 0; i < score->staves.size(); i++)
                 {
@@ -741,7 +784,23 @@ void MWindow::draw_score()
                 BEAT_PAD + cleff_w + key_w,
                 score->staves.size()));
 
-// shift the line right by the repeated objects
+// compute the min & max Y from the 8va extensions
+            for(int i = 0; i < score->staves.size(); i++)
+            {
+                Staff *staff = score->staves.get(i);
+                if(staff->current_8va)
+                {
+                    Group *group = staff->current_8va;
+                    DrawObject *image = group->images.get(0);
+                    if(image->x2 > line->x1)
+                    {
+                        if(image->y < line->min_y.get(i))
+                            line->min_y.set(i, image->y);
+                        if(image->get_y2() > line->max_y.get(i))
+                            line->max_y.set(i, image->get_y2());
+                    }
+                }
+            }
 
 // printf("MWindow::draw_score %d lines=%d current_time=%f\n",
 // __LINE__, score->lines.size(), current_time);
@@ -822,10 +881,10 @@ void MWindow::draw_score()
             }
 
 // update the octave markers
-            if(staff->current_octave &&
-                staff->current_octave->time + staff->current_octave->length > current_time)
+            if(staff->current_8va &&
+                staff->current_8va->time + staff->current_8va->length > current_time)
             {
-                DrawObject *octave_marker = staff->current_octave->images.get(0);
+                DrawObject *octave_marker = staff->current_8va->images.get(0);
                 octave_marker->x2 = x + (max_x - min_x) + max_pad / 2;
 // printf("MWindow::draw_score %d x=%d max_x=%d min_x=%d max_pad=%d\n",
 // __LINE__,
@@ -958,12 +1017,12 @@ void MWindow::draw_score()
                 cursor_y2 = line->y1.get(last) + line->max_y.get(last);
             }
 
-            BC_Window::set_color(BLUE);
-            BC_Window::draw_box(cursor_x1 - line->x1 + line->x_pad, 
+            mwindow->set_color(BLUE);
+            mwindow->draw_box(cursor_x1 - line->x1 + line->x_pad, 
                 cursor_y1, 
                 cursor_x2 - cursor_x1, 
                 cursor_y2 - cursor_y1);
-            BC_Window::set_color(BLACK);
+            mwindow->set_color(BLACK);
         }
 
 //printf("MWindow::draw_score %d line_n=%d %f %f\n", 
@@ -972,8 +1031,8 @@ void MWindow::draw_score()
         int last = score->staves.size() - 1;
         int min_y = line->y1.get(0);
         int max_y = line->y1.get(last) + 4 * LINE_SPACING;
-        BC_Window::draw_line(x1, min_y, x1, max_y);
-        BC_Window::draw_line(x2, min_y, x2, max_y);
+        mwindow->BC_Window::draw_line(x1, min_y, x1, max_y);
+        mwindow->BC_Window::draw_line(x2, min_y, x2, max_y);
 
 // draw staff lines
         for(int i = 0; i < score->staves.size(); i++)
@@ -981,13 +1040,13 @@ void MWindow::draw_score()
             Staff *staff = score->staves.get(i);
             for(int j = 0; j < 5; j++)
             {
-                BC_Window::draw_line(x1, 
+                mwindow->BC_Window::draw_line(x1, 
                     line->y1.get(i) + j * LINE_SPACING, 
                     x2, 
                     line->y1.get(i) + j * LINE_SPACING);
             }
 
-// replicate cleffs, key signatures
+// replicate cleffs, key signatures, 8va markers
             if(line_n > 0)
             {
                 x = x1;
@@ -998,10 +1057,10 @@ void MWindow::draw_score()
                     DrawObject *image = group->images.get(0);
 // printf("MWindow::draw_score %d x=%d image->x=%d min_x=%d\n", 
 // __LINE__, x, image->x, min_x);
-                    BC_Window::draw_pixmap(image->pixmap,
+                    mwindow->draw_pixmap(image->pixmap,
                         x + image->x - min_x,
                         image->y + line->y1.get(i));
-                    x = x1 + group->get_w() + BEAT_PAD;
+                    x += group->get_w() + BEAT_PAD;
                 }
 
                 if(staff->current_key)
@@ -1011,9 +1070,29 @@ void MWindow::draw_score()
                     for(int k = 0; k < group->images.size(); k++)
                     {
                         DrawObject *image = group->images.get(k);
-                        BC_Window::draw_pixmap(image->pixmap,
+                        mwindow->draw_pixmap(image->pixmap,
                             x + image->x - min_x,
                             image->y + line->y1.get(i));
+                    }
+                    x += group->get_w() + BEAT_PAD;
+                }
+
+// extend the 8va
+                if(staff->current_8va)
+                {
+                    Group *group = staff->current_8va;
+                    DrawObject *image = group->images.get(0);
+                    if(image->x2 > line->x1)
+                    {
+//printf("MWindow::draw_score %d line_n=%d 8va continues\n", __LINE__, line_n);
+                        int min_x = group->get_x();
+                        mwindow->draw_pixmap(image->pixmap,
+                            x + image->x - min_x,
+                            image->y + line->y1.get(i));
+                        int x1 = x + image->x - min_x + image->pixmap->get_w();
+                        int x2 = x + image->x2 - line->x1;
+                        int y2 = image->y + line->y1.get(i) + image->pixmap->get_h() / 2;
+                        draw_8va_line(group, x1, x2, y2);
                     }
                 }
             }
@@ -1065,13 +1144,13 @@ void MWindow::draw_score()
     }
 
 
-    flash();
-    unlock_window();
+    mwindow->flash();
+    mwindow->unlock_window();
 
 //    score->dump_beats();
 }
 
-void MWindow::button_press()
+void Capture::handle_button_press()
 {
     Score *score = Score::instance;
     for(int line_n = 0; line_n < score->lines.size(); line_n++)
@@ -1080,8 +1159,8 @@ void MWindow::button_press()
         for(int i = 0; i < score->staves.size(); i++)
         {
             Staff *staff = score->staves.get(i);
-            if(get_relative_cursor_y() >= line->y1.get(i) + line->min_y.get(i) &&
-                get_relative_cursor_y() < line->y1.get(i) + line->max_y.get(i))
+            if(mwindow->get_relative_cursor_y() >= line->y1.get(i) + line->min_y.get(i) &&
+                mwindow->get_relative_cursor_y() < line->y1.get(i) + line->max_y.get(i))
             {
                 current_staff = i;
                 int got_it = 0;
@@ -1091,7 +1170,7 @@ void MWindow::button_press()
                     int x1 = beat->x - line->x1 + line->x_pad;
 
 // cursor right of the current beat
-                    if(x1 < get_relative_cursor_x() ||  
+                    if(x1 < mwindow->get_relative_cursor_x() ||  
 // cursor left of the 1st original beat in the line
                         beat->time == line->start_time)
                     {
@@ -1116,11 +1195,11 @@ void MWindow::button_press()
     }
 }
 
-void MWindow::pop_capture_undo()
+void Capture::pop_undo()
 {
 }
 
-void MWindow::pop_capture_redo()
+void Capture::pop_redo()
 {
 }
 
@@ -1160,7 +1239,7 @@ int save_score()
     fclose(fd);
     
     
-    MWindow::instance->draw_score();
+    Capture::instance->draw_score();
     return result;
 }
 
@@ -1301,7 +1380,7 @@ int load_score(char *path)
 
     Score::instance->dump();
 
-    MWindow::instance->draw_score();
+    Capture::instance->draw_score();
 
     return result;
 }
@@ -1314,7 +1393,7 @@ void prev_beat()
     {
         selection_start -= 1;
         selection_end = selection_start;
-        MWindow::instance->draw_score();
+        Capture::instance->draw_score();
     }
     else
     if(current_staff < score->staves.size())
@@ -1322,7 +1401,7 @@ void prev_beat()
         double max_beat = score->staves.get(current_staff)->max_beat();
         selection_start = max_beat;
         selection_end = selection_start;
-        MWindow::instance->draw_score();
+        Capture::instance->draw_score();
     }
 }
 
@@ -1337,7 +1416,7 @@ void next_beat()
         if(selection_start > max_beat)
             selection_start = 0;
         selection_end = selection_start;
-        MWindow::instance->draw_score();
+        Capture::instance->draw_score();
     }
 }
 
@@ -1357,7 +1436,7 @@ void prev_staff()
         if(selection_start > max_beat)
             selection_start = max_beat;
         selection_end = selection_start;
-        MWindow::instance->draw_score();
+        Capture::instance->draw_score();
     }
 }
 
@@ -1375,7 +1454,7 @@ void next_staff()
         if(selection_start > max_beat)
             selection_start = max_beat;
         selection_end = selection_start;
-        MWindow::instance->draw_score();
+        Capture::instance->draw_score();
     }
 }
 

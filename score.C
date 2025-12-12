@@ -48,9 +48,9 @@ void DrawObject::set(int x,
 
 int DrawObject::is_accidental()
 {
-    return (pixmap == MWindow::flat ||
-        pixmap == MWindow::sharp ||
-        pixmap == MWindow::natural);
+    return (pixmap == Capture::instance->flat ||
+        pixmap == Capture::instance->sharp ||
+        pixmap == Capture::instance->natural);
 }
 
 int DrawObject::get_x2()
@@ -262,44 +262,48 @@ void Score::test()
     group->append(new Note(0, MIDDLE_DF + OCTAVE * 2));
 
     Staff *staff = bass;
+    group = staff->groups.append(new Group(time, IS_OCTAVE));
+    group->octave = -1;
+    group->length = 15 * 5;
     for(int i = 0; i < 5; i++)
     {
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_DF - OCTAVE));
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_EF - OCTAVE));
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_F - OCTAVE));
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_GF - OCTAVE));
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_AF - OCTAVE));
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_BF - OCTAVE));
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_C));
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_DF));
+#define OCTAVES 2
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_DF - OCTAVE * (OCTAVES + 1)));
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_EF - OCTAVE * (OCTAVES + 1)));
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_F - OCTAVE * (OCTAVES + 1)));
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_GF - OCTAVE * (OCTAVES + 1)));
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_AF - OCTAVE * (OCTAVES + 1)));
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_BF - OCTAVE * (OCTAVES + 1)));
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_C - OCTAVE * OCTAVES));
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_DF - OCTAVE * OCTAVES));
 
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_C));
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_BF - OCTAVE));
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_AF - OCTAVE));
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_GF - OCTAVE));
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_F - OCTAVE));
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_EF - OCTAVE));
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_C - OCTAVE * OCTAVES));
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_BF - OCTAVE * (OCTAVES + 1)));
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_AF - OCTAVE * (OCTAVES + 1)));
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_GF - OCTAVE * (OCTAVES + 1)));
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_F - OCTAVE * (OCTAVES + 1)));
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_EF - OCTAVE * (OCTAVES + 1)));
 //printf("Score::test %d time=%d\n", __LINE__, time);
-        group = bass->groups.append(new Group(time++, IS_CHORD));
-        group->append(new Note(0, MIDDLE_DF - OCTAVE));
-        if(staff == bass) 
-            staff = treble;
-        else
-            staff = bass;
+        group = staff->groups.append(new Group(time++, IS_CHORD));
+        group->append(new Note(0, MIDDLE_DF - OCTAVE * (OCTAVES + 1)));
+//         if(staff == bass) 
+//             staff = treble;
+//         else
+//             staff = bass;
     }
 
 #endif
@@ -430,7 +434,7 @@ Staff::~Staff()
 void Staff::reset()
 {
     current_cleff = TREBLE;
-    current_octave = 0;
+    current_8va = 0;
     current_cleff_obj = 0;
     current_key = KEY_C;
     beat_start = 0;

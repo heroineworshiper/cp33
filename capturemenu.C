@@ -151,7 +151,7 @@ int CaptureErase1::handle_event()
         Score::instance->delete_beat();
         selection_start -= 1;
         selection_end = selection_start;
-        MWindow::instance->draw_score();
+        Capture::instance->draw_score();
     }
     return 1;
 }

@@ -212,7 +212,7 @@ void do_capture()
 
     MenuWindow::instance->hide_windows(0);
     CaptureMenu::instance->show();
-    MWindow::instance->draw_score();
+    Capture::instance->draw_score();
 }
 
 void do_reader()
@@ -927,6 +927,8 @@ int main(int argc, char *argv[])
     MWindow::init_colors();
     MWindow::instance = new MWindow;
     MWindow::instance->create_objects();
+    Capture::instance = new Capture;
+    Capture::instance->create_objects();
 
     if(!client_mode && client_address[0])
     {
