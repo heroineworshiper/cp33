@@ -65,6 +65,11 @@ void ReaderTheme::initialize()
 		"button_hi.png",
 		"button_dn.png",
         "load");
+    new_button("new.png",
+		"button_up.png",
+		"button_hi.png",
+		"button_dn.png",
+        "new");
     new_button("save.png",
 		"button_up.png",
 		"button_hi.png",
@@ -113,49 +118,20 @@ void ReaderTheme::initialize()
 		"button_hi.png",
 		"button_dn.png",
         "erase1");
-    new_toggle("erase.png",
-		"button_up.png",
-		"button_hi.png",
-		"check.png",
-		"button_dn.png",
-		"check_hi.png",
-		"erase");
-    new_toggle("draw.png",
-		"button_up.png",
-		"button_hi.png",
-		"check.png",
-		"button_dn.png",
-		"check_hi.png",
-		"draw");
+    new_toggle("erase.png", "erase");
+    new_toggle("draw.png", "draw");
+    new_toggle("start_8va_button.png", "start_8va");
+    new_toggle("end_8va_button.png", "end_8va");
+    new_toggle("8va_button.png", "8va_toggle");
+    new_toggle("rest_button.png", "rest_toggle");
+    new_toggle("key.png", "key_toggle");
 
-    new_toggle("line.png",
-		"button_up.png",
-		"button_hi.png",
-		"check.png",
-		"button_dn.png",
-		"check_hi.png",
-		"line");
-    new_toggle("box.png",
-		"button_up.png",
-		"button_hi.png",
-		"check.png",
-		"button_dn.png",
-		"check_hi.png",
-		"box");
-    new_toggle("disc.png",
-		"button_up.png",
-		"button_hi.png",
-		"check.png",
-		"button_dn.png",
-		"check_hi.png",
-		"disc");
-    new_toggle("circle.png",
-		"button_up.png",
-		"button_hi.png",
-		"check.png",
-		"button_dn.png",
-		"check_hi.png",
-		"circle");
+
+
+    new_toggle("line.png", "line");
+    new_toggle("box.png", "box");
+    new_toggle("disc.png", "disc");
+    new_toggle("circle.png", "circle");
     new_button("top_layer.png",
 		"button_up.png",
 		"button_hi.png",
@@ -233,6 +209,52 @@ void ReaderTheme::fill_box(VFrame *dst, uint32_t color)
     }
 }
 
+void ReaderTheme::invert(VFrame *dst)
+{
+    int components = 4;
+    for(int i = 0; i < dst->get_h(); i++)
+    {
+        uint8_t *row = dst->get_rows()[i];
+        for(int j = 0; j < dst->get_w(); j++)
+        {
+            if(row[j * components + 3] == 0)
+            {
+                row[j * components + 0] = 0;
+                row[j * components + 1] = 0;
+                row[j * components + 2] = 0;
+                row[j * components + 3] = 0xff;
+            }
+            else
+            {
+                row[j * components + 0] ^= 0xff;
+                row[j * components + 1] ^= 0xff;
+                row[j * components + 2] ^= 0xff;
+            }
+        }
+    }
+}
+
+VFrame** ReaderTheme::new_toggle(const char *overlay_path, 
+	const char *title)
+{
+//printf("ReaderTheme::new_toggle %d %s\n", __LINE__, overlay_path);
+	VFrame default_data;
+	default_data.read_png(get_image_data(overlay_path), BC_Resources::dpi);
+	BC_ThemeSet *result = new BC_ThemeSet(5, 1, title ? title : (char*)"");
+	if(title) set_image_set(title, result);
+
+	result->data[0] = new_image("button_up.png");
+	result->data[1] = new_image("button_hi.png");
+	result->data[2] = new_image("button_up.png"); // checked
+	result->data[3] = new_image("button_dn.png");
+	result->data[4] = new_image("button_hi.png"); // checked hi
+	for(int i = 0; i < 5; i++)
+		overlay(result->data[i], &default_data, -1, -1, (i == 3));
+// invert the checked modes
+    invert(result->data[2]);
+    invert(result->data[4]);
+	return result->data;
+}
 
 
 

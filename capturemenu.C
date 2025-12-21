@@ -21,6 +21,8 @@
 
 #include "capture.h"
 #include "capturemenu.h"
+#include "capturemidi.h"
+#include "cursors.h"
 #include "reader.h"
 #include "mwindow.h"
 #include "readermenu.h"
@@ -52,9 +54,23 @@ LoadCapture::LoadCapture(int x, int y)
 
 int LoadCapture::handle_event()
 {
-//    CaptureMenu::instance->hide_window();
     unlock_window();
     MWindow::instance->load->start();
+    lock_window();
+    return 1;
+}
+
+
+NewCapture::NewCapture(int x, int y)
+ : BC_Button(x, y, MWindow::instance->theme->get_image_set("new"))
+{
+    set_tooltip("New score");
+}
+
+int NewCapture::handle_event()
+{
+    unlock_window();
+    Capture::instance->new_score();
     lock_window();
     return 1;
 }
@@ -70,15 +86,9 @@ SaveCapture::SaveCapture(int x, int y)
 int SaveCapture::handle_event()
 {
     unlock_window();
-    if(!save_score())
-    {
-        lock_window();
-        set_images(MWindow::instance->theme->get_image_set("save"));
-        draw_face(1);
-        score_changed = 0;
-    }
-    else
-        lock_window();
+    if(!Capture::instance->save_score())
+        CaptureMenu::instance->update_save();
+    lock_window();
     return 1;
 }
 
@@ -100,10 +110,13 @@ int CaptureRecord::handle_event()
     {
         MWindow::instance->current_operation = RECORD_MIDI;
         CaptureMenu::instance->update_buttons();
+        CaptureMIDI::instance->start_recording();
     }
     else
     {
+        MWindow::instance->set_cursor(ARROW_CURSOR, 0, 0);
         MWindow::instance->current_operation = IDLE;
+        CaptureMIDI::instance->stop_recording();
     }
     return 1;
 }
@@ -130,10 +143,117 @@ int CaptureErase::handle_event()
     }
     else
     {
+        MWindow::instance->set_cursor(ARROW_CURSOR, 0, 0);
         MWindow::instance->current_operation = IDLE;
     }
     return 1;
 }
+
+
+
+Capture8va::Capture8va(int x, int y)
+ : BC_Toggle(x, 
+    y, 
+    MWindow::instance->theme->get_image_set("8va_toggle"), 
+    MWindow::instance->current_operation == RECORD_MIDI)
+{
+    set_tooltip("Draw 8va");
+}
+
+
+int Capture8va::handle_event()
+{
+    if(MWindow::instance->current_operation != DRAW_8VA_START &&
+        MWindow::instance->current_operation != DRAW_8VA_END)
+    {
+        MWindow::instance->current_operation = DRAW_8VA_START;
+        CaptureMenu::instance->update_buttons();
+    }
+    else
+    {
+        MWindow::instance->set_cursor(ARROW_CURSOR, 0, 0);
+        MWindow::instance->current_operation = IDLE;
+    }
+    return 1;
+}
+
+
+CaptureRest::CaptureRest(int x, int y)
+ : BC_Toggle(x, 
+    y, 
+    MWindow::instance->theme->get_image_set("rest_toggle"), 
+    MWindow::instance->current_operation == CAPTURE_REST)
+{
+    set_tooltip("Draw rest");
+}
+
+
+int CaptureRest::handle_event()
+{
+    if(MWindow::instance->current_operation != CAPTURE_REST)
+    {
+        MWindow::instance->current_operation = CAPTURE_REST;
+        CaptureMenu::instance->update_buttons();
+    }
+    else
+    {
+        MWindow::instance->set_cursor(ARROW_CURSOR, 0, 0);
+        MWindow::instance->current_operation = IDLE;
+    }
+    return 1;
+}
+
+Start8va::Start8va(int x, int y)
+ : BC_Toggle(x, 
+    y, 
+    MWindow::instance->theme->get_image_set("start_8va"), 
+    MWindow::instance->current_operation == RECORD_MIDI)
+{
+    set_tooltip("Start 8va");
+}
+
+
+int Start8va::handle_event()
+{
+    if(MWindow::instance->current_operation != DRAW_8VA_START)
+    {
+        MWindow::instance->current_operation = DRAW_8VA_START;
+        CaptureMenu::instance->update_buttons();
+    }
+    else
+    {
+        MWindow::instance->set_cursor(ARROW_CURSOR, 0, 0);
+        MWindow::instance->current_operation = IDLE;
+    }
+    return 1;
+}
+
+End8va::End8va(int x, int y)
+ : BC_Toggle(x, 
+    y, 
+    MWindow::instance->theme->get_image_set("end_8va"), 
+    MWindow::instance->current_operation == RECORD_MIDI)
+{
+    set_tooltip("End 8va");
+}
+
+
+int End8va::handle_event()
+{
+    if(MWindow::instance->current_operation != DRAW_8VA_END)
+    {
+        MWindow::instance->current_operation = DRAW_8VA_END;
+        CaptureMenu::instance->update_buttons();
+    }
+    else
+    {
+        MWindow::instance->set_cursor(ARROW_CURSOR, 0, 0);
+        MWindow::instance->current_operation = IDLE;
+    }
+    return 1;
+}
+
+
 
 CaptureErase1::CaptureErase1(int x, int y)
  : BC_Button(x, 
@@ -148,13 +268,62 @@ int CaptureErase1::handle_event()
 {
     if(selection_start > 0)
     {
+        Capture::instance->push_undo_before();
         Score::instance->delete_beat();
         selection_start -= 1;
         selection_end = selection_start;
+// printf("CaptureErase1::handle_event %d selection_start=%f\n",
+// __LINE__, selection_start);
+        score_changed = 1;
+        CaptureMenu::instance->update_save();
+        Capture::instance->push_undo_after();
         Capture::instance->draw_score();
     }
     return 1;
 }
+
+KeyButton::KeyButton(int x, int y)
+ : BC_Toggle(x, y, MWindow::instance->theme->get_image_set("key_toggle"),
+    0)
+{
+    set_tooltip("Draw key signature");
+}
+
+
+int KeyButton::handle_event()
+{
+    if(MWindow::instance->current_operation != CAPTURE_KEY)
+    {
+        MWindow::instance->current_operation = CAPTURE_KEY;
+        CaptureMenu::instance->update_buttons();
+    }
+    else
+    {
+        MWindow::instance->current_operation = IDLE;
+    }
+    return 1;
+}
+
+KeySelector::KeySelector(int x, int y, int w)
+ : BC_PopupTextBox(CaptureMenu::instance,
+    &CaptureMenu::instance->key_items,
+    CaptureMenu::instance->key_items.get(Capture::instance->current_key)->get_text(),
+    x,
+    y,
+    w,
+    DP(256))
+{
+    set_tooltip("Key");
+}
+
+int KeySelector::handle_event()
+{
+    Capture::instance->current_key = get_number();
+    MWindow::instance->save_defaults();
+    return 1;
+}
+
+
 
 
 
@@ -164,7 +333,7 @@ CaptureMenu::CaptureMenu()
     0,
 	MWindow::instance->theme->get_image_set("reader")[0]->get_w() * 4 + 
         MWindow::instance->theme->margin * 2, 
-	MWindow::instance->theme->get_image_set("reader")[0]->get_h() * 4 + 
+	MWindow::instance->theme->get_image_set("reader")[0]->get_h() * 6 + 
         MWindow::instance->theme->margin * 2,
     -1,
     -1,
@@ -177,6 +346,7 @@ CaptureMenu::CaptureMenu()
 }
 CaptureMenu::~CaptureMenu()
 {
+    key_items.remove_all_objects();
 }
 
 void CaptureMenu::create_objects()
@@ -186,6 +356,26 @@ void CaptureMenu::create_objects()
     int x = x1;
     int y = MWindow::instance->theme->margin;
     BC_SubWindow *window;
+
+    const char* key_titles[] = 
+    {
+        "C", 
+        "D Flat", 
+        "D", 
+        "E Flat", 
+        "E", 
+        "F", 
+        "F Sharp", 
+        "G", 
+        "A Flat", 
+        "A", 
+        "B Flat", 
+        "B", 
+    };
+    for(int i = 0; i < sizeof(key_titles) / sizeof(char*); i++)
+        key_items.append(new BC_ListBoxItem(key_titles[i]));
+
+// 4 wide so we can grab the window border
     add_tool(window = new LoadCapture(x, y));
     x += window->get_w();
     add_tool(save = new SaveCapture(x, y));
@@ -193,27 +383,47 @@ void CaptureMenu::create_objects()
     add_tool(window = new Undo(x, y));
     x += window->get_w();
     add_tool(window = new Redo(x, y));
-    y += window->get_h();
+    x += window->get_w();
 
     x = x1;
+    y += window->get_h();
     add_tool(window = new PrevPage(x, y));
     x += window->get_w();
     add_tool(window = new NextPage(x, y));
     x += window->get_w();
+    add_tool(window = new NewCapture(x, y));
+    x += window->get_w();
 
-
+    x = x1;
+    y += window->get_h();
     add_tool(record = new CaptureRecord(x, y));
     x += record->get_w();
-    add_tool(erase = new CaptureErase(x, y));
-    x += erase->get_w();
-
-    y += window->get_h();
-    x = x1;
     add_tool(erase1 = new CaptureErase1(x, y));
     x += erase1->get_w();
+    add_tool(erase = new CaptureErase(x, y));
+    x += erase->get_w();
+    add_tool(key = new KeyButton(x, y));
+    x += key->get_w();
 
-    y += erase1->get_h();
     x = x1;
+    y += window->get_h();
+    key_selector = new KeySelector(x, 
+        y, 
+        get_w() - margin * 2 - BC_PopupTextBox::calculate_w());
+    key_selector->create_objects();
+
+    x = x1;
+    y += key_selector->get_h();
+    add_tool(start_8va = new Start8va(x, y));
+    x += start_8va->get_w();
+    add_tool(end_8va = new End8va(x, y));
+    x += end_8va->get_w();
+    add_tool(rest = new CaptureRest(x, y));
+
+    x = x1;
+    y += erase1->get_h();
+
+
     add_tool(window = new ReaderButton(x, y));
     x += window->get_w();
 }
@@ -257,15 +467,36 @@ void CaptureMenu::show()
     reposition_window(x, y);
     raise_window(1);
     unlock_window();
-
 }
 
 void CaptureMenu::update_buttons()
 {
+// hide the cursor for these modes
+    if(MWindow::instance->current_operation == ERASE_NOTES)
+        MWindow::instance->set_cursor(TRANSPARENT_CURSOR, 0, 0);
+    else
+        MWindow::instance->set_cursor(ARROW_CURSOR, 0, 0);
     record->set_value(MWindow::instance->current_operation == RECORD_MIDI);
     erase->set_value(MWindow::instance->current_operation == ERASE_NOTES);
+    start_8va->set_value(MWindow::instance->current_operation == DRAW_8VA_START);
+    end_8va->set_value(MWindow::instance->current_operation == DRAW_8VA_END);
+    rest->set_value(MWindow::instance->current_operation == CAPTURE_REST);
+    key->set_value(MWindow::instance->current_operation == CAPTURE_KEY);
 }
 
+void CaptureMenu::update_save()
+{
+    put_event([](void *ptr)
+    {
+        CaptureMenu *menu = CaptureMenu::instance;
+        ReaderTheme * theme = MWindow::instance->theme;
+        if(score_changed)
+            menu->save->set_images(theme->get_image_set("save2"));
+        else
+            menu->save->set_images(theme->get_image_set("save"));
+        menu->save->draw_face(1);
+    }, 0);
+}
 
 
 

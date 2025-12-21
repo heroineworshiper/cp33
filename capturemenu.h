@@ -35,6 +35,13 @@ public:
 };
 
 
+class NewCapture : public BC_Button
+{
+public:
+    NewCapture(int x, int y);
+    int handle_event();
+};
+
 class LoadCapture : public BC_Button
 {
 public:
@@ -58,6 +65,34 @@ public:
     int handle_event();
 };
 
+class Capture8va : public BC_Toggle
+{
+public:
+    Capture8va(int x, int y);
+    int handle_event();
+};
+
+class CaptureRest : public BC_Toggle
+{
+public:
+    CaptureRest(int x, int y);
+    int handle_event();
+};
+
+class Start8va : public BC_Toggle
+{
+public:
+    Start8va(int x, int y);
+    int handle_event();
+};
+
+class End8va : public BC_Toggle
+{
+public:
+    End8va(int x, int y);
+    int handle_event();
+};
+
 
 class CaptureErase : public BC_Toggle
 {
@@ -73,6 +108,21 @@ public:
     int handle_event();
 };
 
+
+class KeyButton : public BC_Toggle
+{
+public:
+    KeyButton(int x, int y);
+    int handle_event();
+};
+
+class KeySelector : public BC_PopupTextBox
+{
+public:
+    KeySelector(int x, int y, int w);
+    int handle_event();
+};
+
 class CaptureMenu : public BC_Window
 {
 public:
@@ -83,16 +133,24 @@ public:
     int close_event();
     void show();
     void update_buttons();
+    void update_save();
 
     SaveCapture *save;
     CaptureRecord *record;
     CaptureErase *erase;
     CaptureErase1 *erase1;
+//    Capture8va *draw_8va;
+    Start8va *start_8va;
+    End8va *end_8va;
+    CaptureRest *rest;
+    KeyButton *key;
+    KeySelector *key_selector;
+    ArrayList <BC_ListBoxItem*> key_items;
     static CaptureMenu *instance;
 };
 
 
-class CaptureThread: public Thread
+class CaptureThread : public Thread
 {
 public:
     CaptureThread();

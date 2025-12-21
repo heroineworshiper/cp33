@@ -31,6 +31,9 @@ public:
     ReaderTheme();
     void initialize();
     void fill_box(VFrame *dst, uint32_t color);
+    VFrame** new_toggle(const char *overlay_path, 
+	    const char *title);
+    void invert(VFrame *dst);
 
     int margin;
 // button graphics for each color

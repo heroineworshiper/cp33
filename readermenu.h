@@ -231,6 +231,7 @@ public:
 };
 
 
+
 class MenuWindow : public BC_Window
 {
 public:
@@ -246,6 +247,7 @@ public:
     void update_color();
     void update_colors();
     void update_buttons();
+    void show();
 
     Save *save;
     Draw *draw;

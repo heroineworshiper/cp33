@@ -24,6 +24,7 @@
 
 
 #include "capture.h"
+#include "capturemenu.h"
 #include "mwindow.h"
 #include "readertheme.h"
 #include "score.h"
@@ -37,34 +38,13 @@ double selection_end = 3;
 int selection_line = 0;
 int cursor_x1 = 0;
 int cursor_x2 = 0;
-int current_key = KEY_F;
+//int current_key = KEY_F;
 int current_score_page = 0;
 char score_path[BCTEXTLEN] = { 0 };
 int score_changed = 0;
 
 
-// test MIDI input
-uint8_t e_minor[] =
-{
-    0x90, 0x40, 0x54, 0x00, // middle E
-    0x90, 0x43, 0x6c, 0x00, // middle G
-    0x90, 0x47, 0x72, 0x00, // middle B
-    0x90, 0x4c, 0x67, 0x00, // E4
-    0x90, 0x43, 0x00, 0x00,
-    0x90, 0x47, 0x00, 0x00,
-    0x90, 0x4c, 0x00, 0x00,
-    0x90, 0x40, 0x00, 0x00
-};
-
-uint8_t full_range[] =
-{
-    0x90, 0x15, 0x63, 0x00,  // min A
-    0x90, 0x15, 0x00, 0x00,
-    0x90, 0x6c, 0x71, 0x00,  // max C
-    0x90, 0x6c, 0x00, 0x00
-};
-
-// 1 for each note in the octave of a major scale.
+// Positions in a major scale are set to 1.
 // Shift right by the number of the key
 const int major_scale[] =
 {
@@ -131,14 +111,23 @@ Capture* Capture::instance = 0;
 
 Capture::Capture()
 {
+    reset_undo();
 }
+
+
+void Capture::reset_undo()
+{
+    current_undo = 0;
+    total_undos = 0;
+}
+
 
 void Capture::create_objects()
 {
     mwindow = MWindow::instance;
     theme = mwindow->theme;
 
-    for(int i = 0; i < UNDO_LEVELS; i++)
+    for(int i = 0; i < CAPTURE_UNDOS; i++)
     {
         undo_before[i] = new CaptureUndo();
         undo_after[i] = new CaptureUndo();
@@ -152,6 +141,9 @@ void Capture::create_objects()
     treble = new BC_Pixmap(mwindow, theme->new_image("treble.png"), PIXMAP_ALPHA);
     bass = new BC_Pixmap(mwindow, theme->new_image("bass.png"), PIXMAP_ALPHA);
     octave = new BC_Pixmap(mwindow, theme->new_image("8va.png"), PIXMAP_ALPHA);
+    start_8va = new BC_Pixmap(mwindow, theme->new_image("start_8va.png"), PIXMAP_ALPHA);
+    end_8va = new BC_Pixmap(mwindow, theme->new_image("end_8va.png"), PIXMAP_ALPHA);
+    rest = new BC_Pixmap(mwindow, theme->new_image("qrest2.png"), PIXMAP_ALPHA);
 }
 
 
@@ -168,7 +160,14 @@ CaptureUndo::~CaptureUndo()
 }
 
 
-
+void CaptureUndo::setup()
+{
+    this->current_staff = ::current_staff;
+    this->selection_start = ::selection_start;
+    this->selection_end = ::selection_end;
+    this->score_changed = ::score_changed;
+    score->copy_from(Score::instance);
+}
 
 
 
@@ -203,7 +202,7 @@ void Capture::process_group(Staff *staff, Group *group)
         {
             BC_Pixmap *pixmap;
             staff->current_key = group;
-            current_key = group->key;
+            int current_key = group->key;
 // reset the accidental table
 //                 int accidental;
 //                 if(key_is_flat[current_key])
@@ -223,6 +222,7 @@ void Capture::process_group(Staff *staff, Group *group)
                 int y = -flat->get_h() * 2 / 3 + 1;
                 int x = 0;
 
+// order to draw the flats in the key signature
                 int flat_order[] = 
                 {
                 //    CDEFGAB, pixels from top of staff
@@ -260,6 +260,7 @@ void Capture::process_group(Staff *staff, Group *group)
                 int y = -sharp->get_h() / 2;
                 int x = 0;
 
+// order to draw the sharps in the key signature
                 int sharp_order[] =
                 {
                 //    CDEFGAB, pixels from top of staff
@@ -323,10 +324,19 @@ void Capture::process_group(Staff *staff, Group *group)
             break;
         }
 
+        case IS_REST:
+            group->images.append(new DrawObject(-rest->get_w() / 2,
+                LINE_SPACING * 2 - rest->get_h() / 2,
+                rest));
+            group->advance = BEAT_PAD;
+            break;
+
         case IS_CHORD:
         default:
         {
             int have_8va_marker = 0;
+            int current_key = KEY_C;
+            if(staff->current_key) current_key = staff->current_key->key;
             for(int j = 0; j < group->notes.size(); j++)
             {
                 Note *note = group->notes.get(j);
@@ -359,6 +369,7 @@ void Capture::process_group(Staff *staff, Group *group)
 
 // compute the accidental
                 int need_accidental = 0;
+// user defined accidental
                 if(note->accidental)
                 {
                     need_accidental = note->accidental;
@@ -387,39 +398,44 @@ void Capture::process_group(Staff *staff, Group *group)
                     }
                 }
                 else
+// auto accidental
                 if(!major_scale[scale_position])
                 {
+//printf("MWindow::process_group %d\n", __LINE__);
 // not on the major scale
                     if(key_is_flat[current_key])
                     {
 // add a sharp to get on a major note
                         scale_position--;
+                        scale_position2--;
                         if(scale_position < 0)
                         {
                             octave--;
                             scale_position += OCTAVE;
                         }
 
-// test for a natural in C MAJ
-                        if(major_scale[scale_position])
-                            need_accidental = NATURAL;
-                        else
+// add the necessary accidental to shift 1/2 tone up
+                        if(major_scale[scale_position2])
                             need_accidental = SHARP;
+                        else
+                            need_accidental = NATURAL;
                     }
                     else
                     {
-// add a flat to get on a major note
+//printf("MWindow::process_group %d scale_position=%d\n", __LINE__, scale_position);
+// add a flat to get on a major posmajor_scaleition
                         scale_position++;
+                        scale_position2++;
                         if(scale_position >= OCTAVE)
                         {
                             octave++;
                             scale_position -= OCTAVE;
                         }
-// test for a natural in C MAJ
-                        if(major_scale[scale_position])
-                            need_accidental = NATURAL;
-                        else
+// add the necessary accidental to shift 1/2 tone down
+                        if(major_scale[scale_position2])
                             need_accidental = FLAT;
+                        else
+                            need_accidental = NATURAL;
                     }
                 }
 
@@ -497,13 +513,14 @@ void Capture::process_group(Staff *staff, Group *group)
                     }
                 }
 
-// printf("MWindow::process_group %d x=%d y=%d\n", 
-// __LINE__, x, y);
-                group->images.append(new DrawObject(x, y, quarter));
-
+// printf("Capture::process_group %d x=%d y=%d group=%p group_n=%d note=%p\n", 
+// __LINE__, x, y, group, staff->groups.number_of(group), note);
+// the quarter note
+                DrawObject *object = group->images.append(new DrawObject(x, y, quarter));
+                object->note = note;
 
 // ledger lines above staff
-                if(center_y < 0)
+                if(center_y <= -LINE_SPACING)
                 {
                     for(int k = LINE_SPACING; k >= y; k -= LINE_SPACING)
                     {
@@ -526,7 +543,7 @@ void Capture::process_group(Staff *staff, Group *group)
                     }
                 }
 
-// accidental
+// draw object for accidental
                 DrawObject *accidental = 0;
                 if(need_accidental == FLAT)
                     accidental = new DrawObject(-flat->get_w(),
@@ -572,10 +589,11 @@ void Capture::process_group(Staff *staff, Group *group)
                     }
 
                     group->images.append(accidental);
+                    accidental->note = note;
                 }
             }
 
-// shift all accidentals left of notes
+// shift all accidentals left of the notes
             int max_x = -0x7fffffff;
             for(int j = 0; j < group->images.size(); j++)
             {
@@ -636,12 +654,15 @@ void Capture::process_group(Staff *staff, Group *group)
 
 void Capture::draw_group(Line *line, int y, Staff *staff, Group *group)
 {
+// set all the absolute coords for the images here
     for(int k = 0; k < group->images.size(); k++)
     {
         DrawObject *image = group->images.get(k);
+        image->abs_x = image->x - line->x1 + line->x_pad;
+        image->abs_y = image->y + y;
         mwindow->draw_pixmap(image->pixmap,
-            image->x - line->x1 + line->x_pad,
-            image->y + y);
+            image->abs_x,
+            image->abs_y);
     }
 
     switch(group->type)
@@ -660,7 +681,7 @@ void Capture::draw_group(Line *line, int y, Staff *staff, Group *group)
             DrawObject *image = group->images.get(0);
             int y2 = image->y + y + image->pixmap->get_h() / 2;
             int x1 = image->x - line->x1 + line->x_pad + image->pixmap->get_w();
-            int x2 = image->x2 - line->x1;
+            int x2 = image->x2 - line->x1 + line->x_pad;
             
             draw_8va_line(group, x1, x2, y2);
             break;
@@ -689,7 +710,7 @@ void Capture::draw_8va_line(Group *group, int x1, int x2, int y2)
 }
 
 
-void Capture::draw_score()
+void Capture::draw_score(int do_flash, int do_lock)
 {
     Score *score = Score::instance;
     int margin = 5;
@@ -697,10 +718,15 @@ void Capture::draw_score()
 // reset the temporaries
     score->beats.remove_all_objects();
     score->lines.remove_all_objects();
+    for(int i = 0; i < score->staves.size(); i++)
+    {
+        Staff *staff = score->staves.get(i);
+        staff->reset(1);
+    }
 // 1st beat
     score->beats.append(new Beat(0, 0));
 
-    mwindow->lock_window();
+    if(do_lock) mwindow->lock_window();
 // finale background color
     mwindow->set_color(0xfdfcf5);
     mwindow->draw_box(0, 0, mwindow->root_w, mwindow->root_h, 0);
@@ -735,12 +761,6 @@ void Capture::draw_score()
 // available pixels in the current line
     int line_w = x2 - x1;
 
-// initialize the staves
-    for(int i = 0; i < score->staves.size(); i++)
-    {
-        Staff *staff = score->staves.get(i);
-        staff->reset();
-    }
 
     cursor_x1 = cursor_x2 = -1;
 
@@ -884,8 +904,10 @@ void Capture::draw_score()
             if(staff->current_8va &&
                 staff->current_8va->time + staff->current_8va->length > current_time)
             {
-                DrawObject *octave_marker = staff->current_8va->images.get(0);
-                octave_marker->x2 = x + (max_x - min_x) + max_pad / 2;
+                DrawObject *image = staff->current_8va->images.get(0);
+// Don't add BEAT_PAD here because it'll cause it to wrap
+// Might have to base wrapping on the beat number instead of x2
+                image->x2 = x + (max_x - min_x) + max_pad / 2;
 // printf("MWindow::draw_score %d x=%d max_x=%d min_x=%d max_pad=%d\n",
 // __LINE__,
 // x,
@@ -904,8 +926,8 @@ void Capture::draw_score()
 // start a new line
         if(x - line->x1 >= line_w || !got_next)
         {
-// printf("MWindow::draw_score %d x=%d line->x1=%d line_w=%d current_time=%f\n",
-// __LINE__, x, line->x1, line_w, current_time);
+//printf("MWindow::draw_score %d x=%d line->x1=%d line_w=%d current_time=%f\n",
+//__LINE__, x, line->x1, line_w, current_time);
 
             line->end_time = current_time;
 
@@ -950,8 +972,8 @@ void Capture::draw_score()
             current_time = score->max_beat();
             line->end_time = current_time;
 
-            if(line->start_time == line->end_time)
-                score->lines.remove_object();
+//            if(line->start_time == line->end_time)
+//                score->lines.remove_object();
             break;
         }
 
@@ -961,15 +983,15 @@ void Capture::draw_score()
     }
 
 // cursor after end of score
+// printf("MWindow::draw_score %d cursor_x1=%d cursor_x2=%d\n",
+// __LINE__, cursor_x1, cursor_x2);
     if(cursor_x1 < 0)
     {
         cursor_x1 = x;
         cursor_x2 = x;
-        selection_start = selection_end = prev_time;
+//        selection_start = selection_end = prev_time;
         selection_line = score->lines.size() - 1;
     }
-//printf("MWindow::draw_score %d cursor_x1=%d cursor_x2=%d\n",
-//__LINE__, cursor_x1, cursor_x2);
     if(cursor_x2 < cursor_x1 + 2) cursor_x2 += 2;
 // end of score
     score->beats.append(new Beat(current_time, x));
@@ -983,11 +1005,11 @@ void Capture::draw_score()
     int cursor_y1 = 0;
     int cursor_y2 = 0;
 
-// reset the staves
+// reset the temporaries
     for(int i = 0; i < score->staves.size(); i++)
     {
         Staff *staff = score->staves.get(i);
-        staff->reset();;
+        staff->reset(0);
     }
 
 //printf("MWindow::draw_score %d lines=%d\n", __LINE__, score->lines.size());
@@ -1050,6 +1072,8 @@ void Capture::draw_score()
             if(line_n > 0)
             {
                 x = x1;
+
+// replicate the cleff
                 if(staff->current_cleff_obj)
                 {
                     Group *group = staff->current_cleff_obj;
@@ -1063,6 +1087,7 @@ void Capture::draw_score()
                     x += group->get_w() + BEAT_PAD;
                 }
 
+// replicate the key signature
                 if(staff->current_key)
                 {
                     Group *group = staff->current_key;
@@ -1084,7 +1109,8 @@ void Capture::draw_score()
                     DrawObject *image = group->images.get(0);
                     if(image->x2 > line->x1)
                     {
-//printf("MWindow::draw_score %d line_n=%d 8va continues\n", __LINE__, line_n);
+//printf("Capture::draw_score %d line_n=%d x2=%d x1=%d 8va continues\n", 
+//__LINE__, line_n, image->x2, line->x1);
                         int min_x = group->get_x();
                         mwindow->draw_pixmap(image->pixmap,
                             x + image->x - min_x,
@@ -1144,68 +1170,548 @@ void Capture::draw_score()
     }
 
 
-    mwindow->flash();
-    mwindow->unlock_window();
+    if(do_flash) mwindow->flash();
+    if(do_lock) mwindow->unlock_window();
 
 //    score->dump_beats();
 }
 
-void Capture::handle_button_press()
+void Capture::button_press_event()
 {
     Score *score = Score::instance;
-    for(int line_n = 0; line_n < score->lines.size(); line_n++)
+
+// keep menu in foreground
+    if(!CaptureMenu::instance->get_hidden())
     {
-        Line *line = score->lines.get(line_n);
-        for(int i = 0; i < score->staves.size(); i++)
+        CaptureMenu::instance->put_event([](void *ptr)
+        { CaptureMenu::instance->raise_window(1); }, 0);
+    }
+
+// escape out of the current operation
+    if(mwindow->current_operation != IDLE &&
+        mwindow->get_buttonpress() == 3)
+    {
+        mwindow->hide_cursor();
+        mwindow->current_operation = IDLE;
+        CaptureMenu::instance->put_event([](void *ptr)
+        { CaptureMenu::instance->update_buttons(); }, 0);
+        return;
+    }
+
+    if(mwindow->current_operation == ERASE_NOTES)
+    {
+        int x, y, w, h, staff_n, group_n, image_n;
+        if(score->find_delete_object(mwindow->get_relative_cursor_x(), 
+            mwindow->get_relative_cursor_y(), 
+            &staff_n, 
+            &group_n, 
+            &image_n,
+            &x,
+            &y,
+            &w,
+            &h))
         {
-            Staff *staff = score->staves.get(i);
-            if(mwindow->get_relative_cursor_y() >= line->y1.get(i) + line->min_y.get(i) &&
-                mwindow->get_relative_cursor_y() < line->y1.get(i) + line->max_y.get(i))
+            Staff *staff = score->staves.get(staff_n);
+            Group *group = staff->groups.get(group_n);
+            DrawObject *image = group->images.get(image_n);
+// printf("Capture::button_press_event %d staff_n=%d group=%p group_n=%d image_n=%d type=%d note=%p\n", 
+// __LINE__, 
+// staff_n,
+// group,
+// group_n,
+// image_n,
+// group->type,
+// image->note);
+            int redraw = 0;
+            switch(group->type)
             {
-                current_staff = i;
-                int got_it = 0;
-                for(int j = score->beats.size() - 1; j >= 0; j--)
-                {
-                    Beat *beat = score->beats.get(j);
-                    int x1 = beat->x - line->x1 + line->x_pad;
-
-// cursor right of the current beat
-                    if(x1 < mwindow->get_relative_cursor_x() ||  
-// cursor left of the 1st original beat in the line
-                        beat->time == line->start_time)
+                case IS_CHORD:
+                    if(image->note)
                     {
-                        selection_start = selection_end = beat->time;
-                        selection_line = line_n;
-                        got_it = 1;
-                        break;
+                        push_undo_before();
+// printf("Capture::button_press_event %d group=%p notes=%d note=%p\n", 
+// __LINE__, group, group->notes.size(), image->note);
+                        group->notes.remove_object(image->note);
+// remove the entire beat
+                        if(group->notes.size() <= 0)
+                        {
+                            double length = group->length;
+// shift all the times left
+                            for(int i = group_n + 1; i < staff->groups.size(); i++)
+                                staff->groups.get(i)->time -= length;
+                            staff->groups.remove_object_number(group_n);
+                        }
+                        score_changed = 1;
+                        CaptureMenu::instance->update_save();
+                        push_undo_after();
+                        redraw = 1;
                     }
+                    break;
+                case IS_OCTAVE:
+// don't shift objects left
+                    push_undo_before();
+                    staff->groups.remove_object_number(group_n);
+                    score_changed = 1;
+                    CaptureMenu::instance->update_save();
+                    push_undo_after();
+                    redraw = 1;
+                    break;
+                case IS_REST:
+                case IS_KEY:
+                case IS_CLEFF:
+                {
+                    push_undo_before();
+                    double length = group->length;
+// shift all the times left
+                    for(int i = group_n + 1; i < staff->groups.size(); i++)
+                        staff->groups.get(i)->time -= length;
+                    staff->groups.remove_object_number(group_n);
+                    score_changed = 1;
+                    CaptureMenu::instance->update_save();
+                    push_undo_after();
+                    redraw = 1;
+                    break;
                 }
+            }
+            if(redraw)
+            {
+                mwindow->cursor_visible = 0;
+                draw_score(1, 0);
+                mwindow->update_cursor(mwindow->get_cursor_x(),
+                    mwindow->get_cursor_y());
+            }
+        }
+    }
+    else
+    {
+// find position of insertion point
+        for(int line_n = 0; line_n < score->lines.size(); line_n++)
+        {
+            Line *line = score->lines.get(line_n);
+            for(int i = 0; i < score->staves.size(); i++)
+            {
+                Staff *staff = score->staves.get(i);
+                if(mwindow->get_relative_cursor_y() >= line->y1.get(i) + line->min_y.get(i) &&
+                    mwindow->get_relative_cursor_y() < line->y1.get(i) + line->max_y.get(i))
+                {
+                    int got_it = 0;
+                    for(int j = score->beats.size() - 1; j >= 0; j--)
+                    {
+                        Beat *beat = score->beats.get(j);
+                        int x1 = beat->x - line->x1 + line->x_pad;
 
-//printf("MWindow::button_press %d %d %f\n", __LINE__, got_it, selection_start);
-//                 if(!got_it)
-//                 {
-//                     double max_beat = staff->max_beat();
-//                     selection_start = max_beat;
-//                 }
-
-                selection_end = selection_start;
-                break;
+    // cursor right of the current beat
+                        if(x1 < mwindow->get_relative_cursor_x() ||  
+    // cursor left of the 1st original beat in the line
+                            beat->time == line->start_time)
+                        {
+                            button_press2(line_n, beat, i);
+                            got_it = 1;
+                            break;
+                        }
+                    }
+    //printf("MWindow::button_press %d %d %f\n", __LINE__, got_it, selection_start);
+                    break;
+                }
             }
         }
     }
 }
 
+void Capture::button_press2(int line_n, Beat *beat, int staff_n)
+{
+    int redraw = 0;
+    switch(mwindow->current_operation)
+    {
+        case CAPTURE_REST:
+        {
+            push_undo_before();
+            Score *score = Score::instance;
+            Staff *staff = score->staves.get(staff_n);
+            Line *line = score->lines.get(line_n);
+            Group *group = new Group(beat->time, IS_REST);
+            group->length = 1;
+            staff->insert_before(beat->time, group);
+//printf("Capture::button_press2 %d time=%f\n", __LINE__, beat->time);
+// shift everything right
+            for(int i = staff->groups.number_of(group) + 1; i < staff->groups.size(); i++)
+            {
+                staff->groups.get(i)->time += 1;
+            }
+            score->clean();
+            score_changed = 1;
+            CaptureMenu::instance->update_save();
+            push_undo_after();
+            redraw = 1;
+            break;
+        }
+
+        case CAPTURE_KEY:
+        {
+            push_undo_before();
+            Score *score = Score::instance;
+            Staff *staff = score->staves.get(staff_n);
+            Line *line = score->lines.get(line_n);
+            Group *group = new Group(beat->time, IS_KEY);
+            group->length = 1;
+            group->key = current_key;
+            staff->insert_before(beat->time, group);
+// shift everything right
+            for(int i = staff->groups.number_of(group) + 1; i < staff->groups.size(); i++)
+            {
+                staff->groups.get(i)->time += 1;
+            }
+            score->clean();
+            score_changed = 1;
+            CaptureMenu::instance->update_save();
+            push_undo_after();
+            redraw = 1;
+            break;
+        }
+
+        case DRAW_8VA_START:
+        {
+            push_undo_before();
+            Score *score = Score::instance;
+            Staff *staff = score->staves.get(staff_n);
+            Line *line = score->lines.get(line_n);
+            Group *group = new Group(beat->time, IS_OCTAVE);
+// find direction of the 8va
+//printf("Capture::button_press_event %d\n", __LINE__);
+            if(mwindow->get_relative_cursor_y() < line->y1.get(staff_n) + LINE_SPACING * 2)
+                group->octave = 1;
+            else
+                group->octave = -1;
+            group->length = 1;
+            staff->insert_before(beat->time, group);
+            score_changed = 1;
+            CaptureMenu::instance->update_save();
+            push_undo_after();
+            redraw = 1;
+            break;
+        }
+        
+        case DRAW_8VA_END:
+        {
+            Score *score = Score::instance;
+            Staff *staff = score->staves.get(staff_n);
+// find nearest 8va
+            for(int i = staff->groups.size() - 1; i >= 0; i--)
+            {
+                Group *group = staff->groups.get(i);
+                if(group->time <= beat->time &&
+                    group->type == IS_OCTAVE)
+                {
+                    push_undo_before();
+                    group->length = beat->time - group->time;
+//printf("Capture::button_press2 %d %f\n", __LINE__, group->length);
+// don't handle beats under a quarter note for now
+                    if(group->length < 0) group->length = 1;
+                    score_changed = 1;
+                    CaptureMenu::instance->update_save();
+                    push_undo_after();
+                    redraw = 1;
+                    break;
+                }
+            }
+            break;
+        }
+
+        default:
+// reposition cursor
+            current_staff = staff_n;
+//printf("Capture::button_press2 %d time=%f\n",
+//__LINE__, beat->time);
+            selection_start = selection_end = beat->time;
+            selection_line = line_n;
+            draw_score(1, 1);
+            break;
+    }
+    
+    if(redraw)
+    {
+        mwindow->cursor_visible = 0;
+        draw_score(1, 0);
+        mwindow->update_cursor(mwindow->get_cursor_x(),
+            mwindow->get_cursor_y());
+    }
+}
+
+int Capture::cursor_motion_event()
+{
+    if(mwindow->current_operation == DRAW_8VA_START ||
+        mwindow->current_operation == DRAW_8VA_END ||
+        mwindow->current_operation == ERASE_NOTES ||
+        mwindow->current_operation == CAPTURE_REST ||
+        mwindow->current_operation == CAPTURE_KEY ||
+        mwindow->current_operation == RECORD_MIDI ||
+        mwindow->current_operation == IDLE)
+    {
+        mwindow->update_cursor(mwindow->get_cursor_x(), 
+            mwindow->get_cursor_y());
+        mwindow->flush();
+// the raspberry pi accumulates drawing commands after the flush, so we need
+// to wait for it to finish
+        mwindow->sync_display();
+        return 1;
+    }
+    return 0;
+}
+
+
+void Capture::draw_cursor()
+{
+    Score *score = Score::instance;
+    int got_it = 0;
+// highlight the object to delete
+    if(mwindow->current_operation == ERASE_NOTES)
+    {
+        int x, y, w, h, staff_n, group_n, image_n;
+
+        if(score->find_delete_object(mwindow->cursor_x, 
+            mwindow->cursor_y, 
+            &staff_n, 
+            &group_n, 
+            &image_n,
+            &x,
+            &y,
+            &w,
+            &h))
+        {
+            int margin = 5;
+// light up the red for more visibility of the small objects
+            mwindow->set_color(WHITE);
+            mwindow->set_inverse();
+            mwindow->draw_fg_rect(x, 
+                y, 
+                w, 
+                h);
+// draw crosshair
+            mwindow->set_line_dashes(1);
+            mwindow->draw_fg_line(0, 
+                mwindow->cursor_y, 
+                x - margin, 
+                mwindow->cursor_y);
+            mwindow->draw_fg_line(x + w + margin, 
+                mwindow->cursor_y, 
+                mwindow->get_w(), 
+                mwindow->cursor_y);
+            mwindow->draw_fg_line(mwindow->cursor_x, 
+                0,  
+                mwindow->cursor_x, 
+                y - margin);
+            mwindow->draw_fg_line(mwindow->cursor_x, 
+                y + h + margin,  
+                mwindow->cursor_x, 
+                mwindow->get_h());
+            mwindow->set_line_dashes(0);
+            mwindow->set_opaque();
+        }
+        else
+        {
+            mwindow->set_color(WHITE);
+            mwindow->set_inverse();
+            mwindow->set_line_dashes(1);
+// draw crosshair
+            mwindow->set_line_dashes(1);
+            mwindow->draw_fg_line(0, 
+                mwindow->cursor_y, 
+                mwindow->get_w(), 
+                mwindow->cursor_y);
+            mwindow->draw_fg_line(mwindow->cursor_x, 
+                0, 
+                mwindow->cursor_x, 
+                mwindow->get_h());
+            mwindow->set_line_dashes(0);
+            mwindow->set_opaque();
+        }
+    }
+    else
+// the crosshair
+    if(mwindow->current_operation == DRAW_8VA_START ||
+        mwindow->current_operation == DRAW_8VA_END ||
+        mwindow->current_operation == CAPTURE_REST ||
+        mwindow->current_operation == CAPTURE_MIDI ||
+        mwindow->current_operation == CAPTURE_KEY ||
+        mwindow->current_operation == IDLE)
+    {
+// detect when we're over a valid area with the button press algorithm
+        int beat_x = 0;
+        for(int line_n = 0; line_n < score->lines.size() && !got_it; line_n++)
+        {
+            Line *line = score->lines.get(line_n);
+            for(int i = 0; i < score->staves.size() && !got_it; i++)
+            {
+                Staff *staff = score->staves.get(i);
+                if(mwindow->cursor_y >= line->y1.get(i) + line->min_y.get(i) &&
+                    mwindow->cursor_y < line->y1.get(i) + line->max_y.get(i))
+                {
+// Use the beat coordinate
+                    for(int j = score->beats.size() - 1; j >= 0; j--)
+                    {
+                        Beat *beat = score->beats.get(j);
+                        int x1 = beat->x - line->x1 + line->x_pad;
+// cursor right of the current beat
+                        if(x1 < mwindow->cursor_x ||  
+// cursor left of the 1st original beat in the line
+                            beat->time == line->start_time)
+                        {
+                            got_it = 1;
+                            beat_x = x1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+//printf("Capture::draw_cursor %d %d %d\n", 
+//__LINE__, mwindow->cursor_x, mwindow->cursor_y);
+        mwindow->set_color(WHITE);
+        mwindow->set_inverse();
+        mwindow->set_line_dashes(1);
+
+//         int icon_w;
+//         int icon_h;
+//         BC_Pixmap *icon;
+//         if(mwindow->current_operation == DRAW_8VA_START)
+//             icon = start_8va;
+//         else
+//             icon = end_8va;
+//         icon_w = icon->get_w();
+//         icon_h = icon->get_h();
+// 
+        mwindow->draw_fg_line(0, 
+            mwindow->cursor_y, 
+            mwindow->get_w(), 
+            mwindow->cursor_y);
+        mwindow->draw_fg_line(beat_x, 
+            0, 
+            beat_x, 
+            mwindow->get_h());
+
+// icon is only necessary if it automatically changes modes
+//         if(got_it)
+//             mwindow->draw_fg_pixmap(icon, 
+// 	            mwindow->cursor_x - icon_w, 
+// 	            mwindow->cursor_y - icon_h);
+
+
+        mwindow->set_line_dashes(0);
+        mwindow->set_opaque();
+    }
+}
+
+
+void Capture::load_undo(CaptureUndo *undo)
+{
+    ::current_staff = undo->current_staff;
+    ::selection_start = undo->selection_start;
+    ::selection_end = undo->selection_end;
+    ::score_changed = undo->score_changed;
+    CaptureMenu::instance->update_save();
+    Score::instance->copy_from(undo->score);
+    Score::instance->clean();
+    draw_score();
+}
+
+
 void Capture::pop_undo()
 {
+    if(current_undo > 0)
+    {
+        current_undo--;
+        load_undo(undo_before[current_undo]);
+    }
 }
 
 void Capture::pop_redo()
 {
+    if(current_undo < total_undos)
+    {
+        load_undo(undo_after[current_undo]);
+        current_undo++;
+    }
+}
+
+void Capture::push_undo_before()
+{
+// free up a level
+    if(current_undo >= CAPTURE_UNDOS)
+    {
+        CaptureUndo *temp_before = undo_before[0];
+        CaptureUndo *temp_after = undo_after[0];
+        for(int i = 0; i < CAPTURE_UNDOS - 1; i++)
+        {
+            undo_before[i] = undo_before[i + 1];
+            undo_after[i] = undo_after[i + 1];
+        }
+        undo_before[CAPTURE_UNDOS - 1] = temp_before;
+        undo_after[CAPTURE_UNDOS - 1] = temp_after;
+        current_undo--;
+        total_undos--;
+    }
+
+// put in current level & truncate redos in the after step
+    undo_before[current_undo]->setup();
+}
+
+void Capture::push_undo_after()
+{
+    undo_after[current_undo]->setup();
+    current_undo++;
+    total_undos = current_undo;
+}
+
+void Capture::set_unchanged()
+{
+    for(int i = 0; i < total_undos; i++)
+    {
+        if(i == current_undo) 
+        {
+            undo_before[i]->score_changed = 0;
+            undo_after[i]->score_changed = 1;
+        }
+        else
+        if(i == current_undo - 1)
+        {
+            undo_before[i]->score_changed = 1;
+            undo_after[i]->score_changed = 0;
+        }
+        else
+        {
+            undo_before[i]->score_changed = 1;
+            undo_after[i]->score_changed = 1;
+        }
+    }
+}
+
+void Capture::new_score()
+{
+    push_undo_before();
+
+    Score::instance->clear();
+    score_path[0] == 0;
+    Staff *treble = Score::instance->staves.append(new Staff);
+    Staff *bass = Score::instance->staves.append(new Staff);
+
+    Group *group;
+    group = treble->groups.append(new Group(0, IS_CLEFF));
+    group->cleff = TREBLE;
+
+    group = bass->groups.append(new Group(0, IS_CLEFF));
+    group->cleff = BASS;
+
+    score_changed = 0;
+    CaptureMenu::instance->update_save();
+    push_undo_after();
+
+    Score::instance->dump();
+    draw_score();
 }
 
 
-
-int save_score()
+int Capture::save_score()
 {
     int result = 0;
 // construct new path
@@ -1231,12 +1737,23 @@ int save_score()
     }
 
     FILE *fd = fopen(score_path, "w");
-    if(Score::instance->save(fd))
+    if(fd)
     {
-        score_path[0] = 0;
-        result = 1;
+        if(Score::instance->save(fd))
+        {
+            score_path[0] = 0;
+            result = 1;
+        }
+        else
+        {
+// success
+            score_changed = 0;
+// set all the undo levels except the current one to changed
+            set_unchanged();
+            CaptureMenu::instance->update_save();
+        }
+        fclose(fd);
     }
-    fclose(fd);
     
     
     Capture::instance->draw_score();
@@ -1281,7 +1798,7 @@ char* getparam(char *ptr, char *param, char *value)
     return ptr;
 }
 
-int load_score(char *path)
+int Capture::load_score(char *path)
 {
     int result = 0;
     char string[BCTEXTLEN];
@@ -1293,10 +1810,10 @@ int load_score(char *path)
 
     if(fd)
     {
-        delete Score::instance;
-        Score::instance = new Score;
+        Score::instance->clear();
         Staff *staff = 0;
         Group *group = 0;
+
 
         while(!feof(fd))
         {
@@ -1317,16 +1834,18 @@ int load_score(char *path)
         ptr = skipwhite(ptr); \
         ptr = getparam(ptr, param, value);
 
+#define GETPARAMS2 }
+
                 GETPARAMS1
                     if(!strcmp(param, "CURRENT_STAFF"))
                         current_staff = atoi(value);
                     else
                     if(!strcmp(param, "SELECTION_START"))
-                        selection_start = atoi(value);
+                        selection_start = atof(value);
                     else
                     if(!strcmp(param, "SELECTION_END"))
-                        selection_end = atoi(value);
-                }
+                        selection_end = atof(value);
+                GETPARAMS2
             }
             else
             if(!strcmp(command, "STAFF"))
@@ -1341,7 +1860,7 @@ int load_score(char *path)
                 group = staff->groups.append(new Group);
                 GETPARAMS1
                     if(!strcmp(param, "TYPE"))
-                        group->type = atoi(value);
+                        group->type = Group::text_to_type(value);
                     else
                     if(!strcmp(param, "TIME"))
                         group->time = atof(value);
@@ -1357,7 +1876,7 @@ int load_score(char *path)
                     else
                     if(!strcmp(param, "OCTAVE"))
                         group->octave = atoi(value);
-                }
+                GETPARAMS2
 //                group->dump();
             }
             else
@@ -1370,22 +1889,23 @@ int load_score(char *path)
                     else
                     if(!strcmp(param, "ACCIDENTAL"))
                         current_note->accidental = atoi(value);
-                }
+                GETPARAMS2
             }
-
-            
         }
         fclose(fd);
+        
+        reset_undo();
+        score_changed = 0;
+        CaptureMenu::instance->update_save();
     }
 
-    Score::instance->dump();
-
-    Capture::instance->draw_score();
+//    Score::instance->dump();
+    draw_score();
 
     return result;
 }
 
-void prev_beat()
+void Capture::prev_beat()
 {
     Score *score = Score::instance;
 
@@ -1393,7 +1913,7 @@ void prev_beat()
     {
         selection_start -= 1;
         selection_end = selection_start;
-        Capture::instance->draw_score();
+        draw_score();
     }
     else
     if(current_staff < score->staves.size())
@@ -1401,11 +1921,11 @@ void prev_beat()
         double max_beat = score->staves.get(current_staff)->max_beat();
         selection_start = max_beat;
         selection_end = selection_start;
-        Capture::instance->draw_score();
+        draw_score();
     }
 }
 
-void next_beat()
+void Capture::next_beat()
 {
     Score *score = Score::instance;
 
@@ -1416,11 +1936,11 @@ void next_beat()
         if(selection_start > max_beat)
             selection_start = 0;
         selection_end = selection_start;
-        Capture::instance->draw_score();
+        draw_score();
     }
 }
 
-void prev_staff()
+void Capture::prev_staff()
 {
     Score *score = Score::instance;
 
@@ -1436,11 +1956,11 @@ void prev_staff()
         if(selection_start > max_beat)
             selection_start = max_beat;
         selection_end = selection_start;
-        Capture::instance->draw_score();
+        draw_score();
     }
 }
 
-void next_staff()
+void Capture::next_staff()
 {
     Score *score = Score::instance;
 
@@ -1454,7 +1974,7 @@ void next_staff()
         if(selection_start > max_beat)
             selection_start = max_beat;
         selection_end = selection_start;
-        Capture::instance->draw_score();
+        draw_score();
     }
 }
 

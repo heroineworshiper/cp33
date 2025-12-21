@@ -1,6 +1,6 @@
 /*
  * MUSIC READER
- * Copyright (C) 2021-2025 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2025 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,18 +18,12 @@
  * 
  */
 
-
-#ifndef SCORE_INC
-#define SCORE_INC
-
+#ifndef CAPTUREMIDI_INC
+#define CAPTUREMIDI_INC
 
 
-class Score;
-class Staff;
-class Group;
-class Note;
-class Line;
-class Beat;
+
+class CaptureMIDI;
 
 
 

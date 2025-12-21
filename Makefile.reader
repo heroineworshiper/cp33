@@ -1,6 +1,6 @@
 OBJDIR := $(shell uname --machine)
 CC := g++
-CXXFLAGS := -g -O3 -Iguicast
+CXXFLAGS := -g -O3 -std=c++11 -Iguicast 
 
 # windowed mode on x86
 # assume it's being built against a Cinelerra library
@@ -11,6 +11,7 @@ endif
 
 PNGS := \
     images/8va.png \
+    images/8va_button.png \
     images/bass.png \
     images/bottom_layer.png \
 	images/box.png \
@@ -31,21 +32,30 @@ PNGS := \
     images/erase.png \
     images/erase1.png \
     images/flat.png \
+    images/key.png \
     images/ledger.png \
     images/line.png \
 	images/load.png \
     images/natural.png \
     images/next_page.png \
+    images/new.png \
     images/ok.png \
     images/palette_bg.png \
     images/prev_page.png \
     images/quarter.png \
+    images/qrest.png \
+    images/qrest2.png \
     images/reader.png \
     images/record.png \
     images/redo.png \
+    images/rest_button.png \
     images/save2.png \
     images/save.png \
     images/sharp.png \
+    images/start_8va_button.png \
+    images/end_8va_button.png \
+    images/start_8va.png \
+    images/end_8va.png \
     images/stop.png \
     images/treble.png \
     images/top_layer.png \
@@ -55,6 +65,7 @@ PNGS := \
 OBJS := \
     capture.o \
     capturemenu.o \
+    capturemidi.o \
 	reader.o \
     readermenu.o \
 	readertheme.o \

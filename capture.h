@@ -44,12 +44,6 @@ extern int score_changed;
 
 
 
-extern int save_score();
-extern int load_score(char *path);
-extern void prev_beat();
-extern void next_beat();
-extern void prev_staff();
-extern void next_staff();
 
 
 
@@ -59,10 +53,14 @@ public:
     CaptureUndo();
     ~CaptureUndo();
 
+// set to the current state
+    void setup();
+
     Score *score;
     int current_staff;
     double selection_start;
     double selection_end;
+    int score_changed;
 };
 
 
@@ -72,22 +70,42 @@ public:
     Capture();
 
     void create_objects();
+    void reset_undo();
     void push_undo_before();
     void push_undo_after();
     void pop_undo();
     void pop_redo();
-    void draw_score();
-    void handle_button_press();
+    void load_undo(CaptureUndo *undo);
+// set all the undo levels except the current one to changed
+    void set_unchanged();
+    
+    void draw_score(int do_flash = 1, int do_lock = 1);
+    void button_press_event();
+    void button_press2(int line_n, Beat *beat, int staff_n);
+    int cursor_motion_event();
     void process_group(Staff *staff, Group *group);
     void draw_group(Line *line, int y, Staff *staff, Group *group);
     void draw_8va_line(Group *group, int x1, int x2, int y2);
-
+    void draw_cursor();
+    void new_score();
+    int load_score(char *path);
+    int save_score();
+    void prev_beat();
+    void next_beat();
+    void prev_staff();
+    void next_staff();
 
     
     
     static Capture *instance;
-    CaptureUndo *undo_before[UNDO_LEVELS];
-    CaptureUndo *undo_after[UNDO_LEVELS];
+    int current_undo;
+    int total_undos;
+    CaptureUndo *undo_before[CAPTURE_UNDOS];
+    CaptureUndo *undo_after[CAPTURE_UNDOS];
+
+// selection for key tool
+    int current_key;
+
     MWindow *mwindow;
     ReaderTheme *theme;
     BC_Pixmap *sharp;
@@ -98,6 +116,9 @@ public:
     BC_Pixmap *treble;
     BC_Pixmap *bass;
     BC_Pixmap *octave;
+    BC_Pixmap *start_8va;
+    BC_Pixmap *end_8va;
+    BC_Pixmap *rest;
 };
 
 

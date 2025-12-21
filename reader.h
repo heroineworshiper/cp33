@@ -49,6 +49,8 @@
 
 // undo levels for annotations
 #define UNDO_LEVELS 10
+// undo levels for notation entry
+#define CAPTURE_UNDOS 100
 
 // use double buffering
 #define BG_PIXMAP
@@ -87,6 +89,13 @@
 #define DRAW_BOX 7
 #define RECORD_MIDI 8
 #define ERASE_NOTES 9
+#define DRAW_8VA_START 10
+#define DRAW_8VA_END 11
+#define CAPTURE_REST 12
+#define CAPTURE_KEY 13
+#define CAPTURE_MIDI 14
+
+
 
 
 extern int client_mode;

@@ -24,6 +24,7 @@
 #include "readertheme.h"
 #include "mwindow.h"
 #include "capture.h"
+#include "capturemenu.h"
 #include "clip.h"
 #include <string.h>
 
@@ -127,7 +128,7 @@ void LoadFileThread::handle_done_event(int result)
         if(mode == READER_MODE)
             ::load_file_entry(gui->get_submitted_path());
         else
-            ::load_score(gui->get_submitted_path());
+            Capture::instance->load_score(gui->get_submitted_path());
     }
     else
     {
@@ -862,6 +863,40 @@ void MenuWindow::hide_windows(int lock_it)
         unlock_window();
     }
 }
+
+void MenuWindow::show()
+{
+    MWindow::instance->lock_window();
+    int x = CaptureMenu::instance->get_x() +
+        get_resources()->get_left_border();
+    int y = CaptureMenu::instance->get_y() +
+        get_resources()->get_top_border();
+    if(x + get_w() > MWindow::instance->get_w())
+    {
+        x = MWindow::instance->get_w() - get_w();
+    }
+    if(y + get_h() > MWindow::instance->get_h())
+    {
+        y = MWindow::instance->get_h() - get_h();
+    }
+    if(x < 0)
+    {
+        x = 0;
+    }
+
+    if(y < 0)
+    {
+        y = 0;
+    }
+    MWindow::instance->unlock_window();
+
+    lock_window();
+    show_window();
+    reposition_window(x, y);
+    raise_window(1);
+    unlock_window();
+}
+
 
 
 MenuThread::MenuThread()

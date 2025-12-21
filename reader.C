@@ -66,11 +66,13 @@
 
 #include "capture.h"
 #include "capturemenu.h"
+#include "capturemidi.h"
 #include "mwindow.h"
 #include "reader.h"
 //#include "readerbrushes.h"
 #include "readermenu.h"
 #include "readertheme.h"
+#include "sema.h"
 #include "score.h"
 
 
@@ -104,8 +106,8 @@ int command_size2;
 int command_counter2 = 0;
 
 int command_result;
-sem_t command_ready;
-sem_t command_done;
+Sema command_ready;
+Sema command_done;
 int client_mode = 0;
 const char *export_path = 0;
 
@@ -221,6 +223,7 @@ void do_reader()
     MWindow::instance->current_operation = IDLE;
 
     CaptureMenu::instance->hide_window();
+    MenuWindow::instance->show();
     MWindow::instance->show_page(current_page, 1);
 }
 
@@ -485,7 +488,7 @@ void* server_thread(void *ptr)
 
     while(1)
     {
-        sem_wait(&command_ready);
+        command_ready.lock();
         
 
         int retries = 0;
@@ -535,7 +538,7 @@ void* server_thread(void *ptr)
         command_result = ack_result;
         
         
-        sem_post(&command_done);
+        command_done.unlock();
     }
 }
 
@@ -546,12 +549,12 @@ int send_command(int id, uint8_t *value, int value_size)
     memcpy(command + 1, value, value_size);
     command_size = 1 + value_size;
     command_result = -1;
-    sem_post(&command_ready);
+    command_ready.unlock();
 }
 
 int wait_command()
 {
-    sem_wait(&command_done);
+    command_done.lock();
     return command_result;
 }
 
@@ -926,9 +929,12 @@ int main(int argc, char *argv[])
 //    init_brushes();
     MWindow::init_colors();
     MWindow::instance = new MWindow;
-    MWindow::instance->create_objects();
     Capture::instance = new Capture;
+    CaptureMIDI::instance = new CaptureMIDI;
+
+    MWindow::instance->create_objects();
     Capture::instance->create_objects();
+    CaptureMIDI::instance->initialize();
 
     if(!client_mode && client_address[0])
     {
@@ -939,8 +945,6 @@ int main(int argc, char *argv[])
         }
 
         printf("Starting network server\n");
-        sem_init(&command_ready, 0, 0);
-        sem_init(&command_done, 0, 0);
         pthread_create(&tid, &attr, server_thread, 0);
 
 //         if(path)

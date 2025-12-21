@@ -1,6 +1,6 @@
 /*
  * MUSIC READER
- * Copyright (C) 2021-2025 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2025 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,18 +18,28 @@
  * 
  */
 
+#ifndef CAPTUREMIDI_H
+#define CAPTUREMIDI_H
 
-#ifndef SCORE_INC
-#define SCORE_INC
+#include "sema.inc"
+#include "thread.h"
 
+class CaptureMIDI : public Thread
+{
+public:
+    CaptureMIDI();
+    void initialize();
+    void run();
+    
+    void start_recording();
+    void stop_recording();
+    
+    static CaptureMIDI *instance;
+    Sema *command_ready;
+    Sema *command_done;
+    int done;
+};
 
-
-class Score;
-class Staff;
-class Group;
-class Note;
-class Line;
-class Beat;
 
 
 

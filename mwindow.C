@@ -28,6 +28,7 @@
 #include "readermenu.h"
 #include "readertheme.h"
 #include "mwindow.h"
+#include "score.h"
 #include <string.h>
 #include <unistd.h>
 
@@ -203,6 +204,8 @@ void MWindow::load_defaults()
     CLAMP(draw_size, 1, MAX_BRUSH);
     CLAMP(erase_size, 1, MAX_BRUSH);
 
+    Capture::instance->current_key = defaults->get("CURRENT_KEY", KEY_DF);
+    CLAMP(Capture::instance->current_key, 0, KEY_B);
     
     if(get_resources()->filebox_w > ROOT_W)
     {
@@ -232,6 +235,8 @@ void MWindow::save_defaults()
     defaults->update("BOTTOM_COLOR", (int32_t)bottom_color);
     defaults->update("DRAW_SIZE", (int32_t)draw_size);
     defaults->update("ERASE_SIZE", (int32_t)erase_size);
+
+    defaults->update("CURRENT_KEY", Capture::instance->current_key);
     defaults->save();
 }
 
@@ -290,7 +295,7 @@ void MWindow::push_undo_before()
             total_undos--;
         }
 
-// put in current level & truncate redos
+// put in current level & truncate redos in the after step
         undo_before[current_undo]->copy_from(page->annotations);
     }
 }
@@ -748,23 +753,27 @@ int MWindow::keypress_event()
             if(mode == READER_MODE)
                 prev_page(2, 0);
             else
-                prev_beat();
+                Capture::instance->prev_beat();
             break;
 
         case RIGHT:
             if(mode == READER_MODE)
                 next_page(2, 0);
             else
-                next_beat();
+                Capture::instance->next_beat();
             break;
 
         case UP:
             if(mode == CAPTURE_MODE)
-                prev_staff();
+                Capture::instance->prev_staff();
             break;
         case DOWN:
             if(mode == CAPTURE_MODE)
-                next_staff();
+                Capture::instance->next_staff();
+            break;
+
+        case 'd':
+            if(mode == CAPTURE_MODE) Score::instance->dump();
             break;
 
         case 'z':
@@ -784,21 +793,9 @@ int MWindow::button_press_event()
     if(client_mode) return 0;
 
 
-    if(mode == CAPTURE_MODE &&
-        get_buttonpress() == 1)
+    if(mode == CAPTURE_MODE)
     {
-        if(!CaptureMenu::instance->get_hidden())
-        {
-//printf("MWindow::button_press_event %d %p %p\n", 
-//__LINE__, CaptureMenu::instance, MenuWindow::instance);
-            unlock_window();
-            CaptureMenu::instance->lock_window();
-            CaptureMenu::instance->raise_window(1);
-            CaptureMenu::instance->unlock_window();
-            lock_window();
-        }
-        Capture::instance->handle_button_press();
-        Capture::instance->draw_score();
+        Capture::instance->button_press_event();
         return 1;
     }
 
@@ -821,9 +818,8 @@ int MWindow::button_press_event()
         current_operation != IDLE)
     {
 printf("MWindow::button_press_event %d\n", __LINE__);
-        MenuWindow::instance->lock_window();
-        MenuWindow::instance->raise_window(1);
-        MenuWindow::instance->unlock_window();
+        MenuWindow::instance->put_event([](void *ptr)
+        { MenuWindow::instance->raise_window(1); }, 0);
     }
 
 // start a line segment
@@ -874,47 +870,8 @@ int MWindow::button_release_event()
 {
     if(client_mode) return 0;
 
-    if(mode == CAPTURE_MODE &&
-        get_buttonpress() == 1)
+    if(mode == CAPTURE_MODE)
     {
-//         int x = get_abs_cursor_x(0);
-//         int y = get_abs_cursor_y(0);
-//         unlock_window();
-// 
-//         CaptureMenu::instance->lock_window();
-//         if(x + CaptureMenu::instance->get_w() > root_w)
-//         {
-//             x = root_w - CaptureMenu::instance->get_w();
-//         }
-//         if(y + CaptureMenu::instance->get_h() > root_h)
-//         {
-//             y = root_h - CaptureMenu::instance->get_h();
-//         }
-//         if(x < 0)
-//         {
-//             x = 0;
-//         }
-// 
-//         if(y < 0)
-//         {
-//             y = 0;
-//         }
-//         CaptureMenu::instance->unlock_window();
-//         if(CaptureMenu::instance->get_hidden())
-//         {
-//             CaptureMenu::instance->lock_window();
-//             CaptureMenu::instance->show_window();
-//             CaptureMenu::instance->reposition_window(x, y);
-//             CaptureMenu::instance->raise_window(1);
-//             CaptureMenu::instance->unlock_window();
-//         }
-//         else
-//         {
-//             CaptureMenu::instance->lock_window();
-//             CaptureMenu::instance->hide_window();
-//             CaptureMenu::instance->unlock_window();
-//         }
-//         lock_window();
         return 1;
     }
 
@@ -939,9 +896,8 @@ int MWindow::button_release_event()
         if(!MenuWindow::instance->get_hidden())
         {
 printf("MWindow::button_press_event %d\n", __LINE__);
-            MenuWindow::instance->lock_window();
-            MenuWindow::instance->raise_window(1);
-            MenuWindow::instance->unlock_window();
+            MenuWindow::instance->put_event([](void *ptr)
+            { MenuWindow::instance->raise_window(1); }, 0);
         }
         dragging = 0;
         return 1;
@@ -1072,6 +1028,11 @@ printf("MWindow::button_press_event %d\n", __LINE__);
 int MWindow::cursor_motion_event()
 {
     int need_cursor = 0;
+    if(mode == CAPTURE_MODE)
+    {
+        return Capture::instance->cursor_motion_event();
+    }
+
     if(!dragging && !cursor_entered)
     {
 // motion event happened after cursor left
@@ -1165,7 +1126,7 @@ int MWindow::cursor_motion_event()
             need_cursor = 1;
             break;
     }
-    
+
     if(need_cursor)
     {
 //printf("MWindow::cursor_motion_event %d %d\n", __LINE__, is_event_win());
@@ -1192,7 +1153,10 @@ int MWindow::cursor_leave_event()
 int MWindow::cursor_enter_event()
 {
     if(is_event_win() &&
-        current_operation != IDLE)
+        current_operation != IDLE &&
+        current_operation != RECORD_MIDI &&
+        current_operation != ERASE_NOTES &&
+        current_operation != CAPTURE_REST)
     {
 //printf("MWindow::cursor_enter_event %d\n", __LINE__);
         update_cursor(get_cursor_x() / zoom_factor + zoom_x,
@@ -1840,6 +1804,12 @@ void MWindow::draw_line_preview(int x1, int y1, int x2, int y2)
 
 void MWindow::draw_cursor()
 {
+    if(mode == CAPTURE_MODE)
+    {
+        Capture::instance->draw_cursor();
+        return;
+    }
+
     int margin = 5;
     set_line_dashes(0);
     set_color(WHITE);
@@ -1848,7 +1818,7 @@ void MWindow::draw_cursor()
 
 //usleep(100000);
 
-    int brush_size;
+    int brush_size = 0;
     if(current_operation == DRAWING ||
         current_operation == DRAW_LINE ||
         current_operation == DRAW_CIRCLE ||
@@ -2093,17 +2063,19 @@ void MWindow::update_cursor(int x, int y)
 {
     hide_cursor();
 
-    if(current_operation != IDLE)
+    if(mode == CAPTURE_MODE ||
+        current_operation != IDLE)
     {
 // show new cursor position
         cursor_x = x;
         cursor_y = y;
-        if(current_operation != IDLE &&
+        if(mode == CAPTURE_MODE ||
+            (current_operation != IDLE &&
             x >= 0 && 
-            y >= 0)
+            y >= 0))
         {
-            draw_cursor();
 //printf("MWindow::update_cursor %d\n", __LINE__);
+            draw_cursor();
             cursor_visible = 1;
         }
     }
@@ -2113,9 +2085,9 @@ void MWindow::hide_cursor()
 {
     if(cursor_visible)
     {
+//printf("MWindow::hide_cursor %d\n", __LINE__);
 // hide previous cursor position
         draw_cursor();
-//printf("MWindow::hide_cursor %d\n", __LINE__);
         cursor_visible = 0;
         cursor_x = -1;
         cursor_y = -1;

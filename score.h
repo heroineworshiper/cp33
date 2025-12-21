@@ -89,15 +89,22 @@ public:
 
     void set(int x, int y, BC_Pixmap *pixmap);
     int is_accidental();
-// maximum X of all images
+// maximum X of the pixmap
     int get_x2();
-// maximum Y of all images
+// maximum Y of the pixmap
     int get_y2();
 
+// relative x around the beat
     int x;
+// relative y to the staff
     int y;
 // endpoint if octave marker
     int x2;
+// absolute x & y from the line wrapping & staff calculations
+    int abs_x;
+    int abs_y;
+// parent note for deletion operations
+    Note *note;
 // pointer to the mwindow object
     BC_Pixmap *pixmap;
 };
@@ -111,6 +118,7 @@ public:
     ~Note();
 
     void reset();
+    void copy_from(Note *src);
     int save(FILE *fd);
 
     int pitch;
@@ -136,23 +144,32 @@ public:
 
     void append(Note *note);
     int save(FILE *fd);
+    static const char* type_to_text(int type);
+    static int text_to_type(const char *type);
     void dump();
 // width of all images
     int get_w();
+    int get_h();
 // minimum x of all images
     int get_x();
+    int get_abs_x();
+    int get_abs_y();
+    void copy_from(Group *src);
 
 // absolute starting time in beats
+// playback will need to factor in object type
     double time;
 // length in beats for octave shift
     double length;
 
     int type;
-#define IS_CHORD 0
+// enums are in the order they should appear in a single beat
+#define IS_BAR 0
 #define IS_CLEFF 1
 #define IS_KEY 2
-#define IS_BAR 3
-#define IS_OCTAVE 4
+#define IS_OCTAVE 3
+#define IS_CHORD 4
+#define IS_REST 5
 // cleff
     int cleff;
 // key signature
@@ -175,9 +192,11 @@ public:
     
     int save(FILE *fd);
     double max_beat();
+    void copy_from(Staff *src);
+    Group* insert_before(double time, Group *new_group);
     void dump();
-// reset drawing variables
-    void reset();
+// reset temporaries for drawing
+    void reset(int all);
     ArrayList<Group*> groups;
 
 // values computed during drawing
@@ -203,10 +222,8 @@ public:
     void reset();
 
     double time;
-// abs coordinates on the screen
+// x coordinate on infinitely wide line
     int x;
-    int y1;
-    int y2;
 };
 
 class Line
@@ -237,10 +254,24 @@ public:
     ~Score();
     
     void test();
+    void clear();
     int save(FILE *fd);
+    void copy_from(Score *src);
     void delete_beat();
-    void dump();
     double max_beat();
+    int find_delete_object(int cursor_x, 
+        int cursor_y, 
+        int *staff_n, 
+        int *group_n, 
+        int *image_n,
+        int *x,
+        int *y,
+        int *w,
+        int *h);
+// fill gaps with rests.  Sort groups by time.
+    void clean();
+
+    void dump();
     void dump_beats();
 
 // the mane score
