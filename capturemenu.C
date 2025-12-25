@@ -39,7 +39,8 @@ ReaderButton::ReaderButton(int x, int y)
 
 int ReaderButton::handle_event()
 {
-    do_reader();
+    CaptureMIDI::instance->stop_recording();
+    Reader::instance->do_reader();
     return 1;
 }
 
@@ -71,6 +72,7 @@ int NewCapture::handle_event()
 {
     unlock_window();
     Capture::instance->new_score();
+    CaptureMIDI::instance->stop_recording();
     lock_window();
     return 1;
 }
@@ -140,6 +142,7 @@ int CaptureErase::handle_event()
     {
         MWindow::instance->current_operation = ERASE_NOTES;
         CaptureMenu::instance->update_buttons();
+        CaptureMIDI::instance->stop_recording();
     }
     else
     {
@@ -168,6 +171,7 @@ int Capture8va::handle_event()
     {
         MWindow::instance->current_operation = DRAW_8VA_START;
         CaptureMenu::instance->update_buttons();
+        CaptureMIDI::instance->stop_recording();
     }
     else
     {
@@ -194,6 +198,7 @@ int CaptureRest::handle_event()
     {
         MWindow::instance->current_operation = CAPTURE_REST;
         CaptureMenu::instance->update_buttons();
+        CaptureMIDI::instance->stop_recording();
     }
     else
     {
@@ -219,6 +224,7 @@ int Start8va::handle_event()
     {
         MWindow::instance->current_operation = DRAW_8VA_START;
         CaptureMenu::instance->update_buttons();
+        CaptureMIDI::instance->stop_recording();
     }
     else
     {
@@ -244,6 +250,7 @@ int End8va::handle_event()
     {
         MWindow::instance->current_operation = DRAW_8VA_END;
         CaptureMenu::instance->update_buttons();
+        CaptureMIDI::instance->stop_recording();
     }
     else
     {
@@ -270,8 +277,8 @@ int CaptureErase1::handle_event()
     {
         Capture::instance->push_undo_before();
         Score::instance->delete_beat();
-        selection_start -= 1;
-        selection_end = selection_start;
+//        selection_start -= 1;
+//        selection_end = selection_start;
 // printf("CaptureErase1::handle_event %d selection_start=%f\n",
 // __LINE__, selection_start);
         score_changed = 1;
@@ -296,6 +303,7 @@ int KeyButton::handle_event()
     {
         MWindow::instance->current_operation = CAPTURE_KEY;
         CaptureMenu::instance->update_buttons();
+        CaptureMIDI::instance->stop_recording();
     }
     else
     {
@@ -387,11 +395,11 @@ void CaptureMenu::create_objects()
 
     x = x1;
     y += window->get_h();
+    add_tool(window = new NewCapture(x, y));
+    x += window->get_w() * 2;
     add_tool(window = new PrevPage(x, y));
     x += window->get_w();
     add_tool(window = new NextPage(x, y));
-    x += window->get_w();
-    add_tool(window = new NewCapture(x, y));
     x += window->get_w();
 
     x = x1;
@@ -464,6 +472,7 @@ void CaptureMenu::show()
 
     lock_window();
     show_window();
+    update_buttons();
     reposition_window(x, y);
     raise_window(1);
     unlock_window();

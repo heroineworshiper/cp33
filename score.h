@@ -142,6 +142,8 @@ public:
     ~Group();
     void reset();
 
+// sorts the notes
+// deletes the note argument if it exists
     void append(Note *note);
     int save(FILE *fd);
     static const char* type_to_text(int type);

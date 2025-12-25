@@ -46,7 +46,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#ifndef USE_WINDOW
+#ifdef RASPIAN
 #include <wiringPi.h>
 #endif
 #include <unistd.h>
@@ -78,6 +78,8 @@
 
 
 
+
+Reader* Reader::instance = 0;
 
 
 
@@ -124,13 +126,11 @@ char reader_path[BCTEXTLEN];
 int file_changed = 0;
 int current_page = 0;
 
-int mode = READER_MODE;
 
 
 
 char client_address[BCTEXTLEN];
 int client_port;
-int server_port;
 
 Page::Page()
 {
@@ -155,69 +155,73 @@ Page::~Page()
 ArrayList<Page*> pages;
 
 
-
-
-
-
-void next_page(int step, int lock_it)
-{
-//    printf("next_page %d\n", __LINE__);
-#ifdef TWO_PAGE
-    if(current_page < pages.size() - step)
-    {
-        MWindow::instance->reset_undo();
-        current_page += step;
-        int temp = current_page + 1;
-        send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
-        MWindow::instance->show_page(current_page, lock_it);
-        wait_command();
-    }
+int Reader::mode = READER_MODE;
+#ifdef RASPIAN
+int Reader::display_mode = TWO_PAGE;
 #else
-    if(current_page < pages.size() - 1)
-    {
-        MWindow::instance->reset_undo();
-        current_page++;
-        MWindow::instance->show_page(current_page, lock_it);
-    }
+int Reader::display_mode = ONE_PAGE;
 #endif
+
+
+Reader::Reader()
+{
 }
 
-void prev_page(int step, int lock_it)
+
+void Reader::next_page(int step, int lock_it)
 {
-//    printf("prev_page %d\n", __LINE__);
+//printf("next_page %d\n", __LINE__);
+    if(display_mode == TWO_PAGE)
+    {
+        if(current_page < pages.size() - step)
+        {
+            MWindow::instance->reset_undo();
+            current_page += step;
+            int temp = current_page + 1;
+            send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
+            MWindow::instance->show_page(current_page, lock_it);
+            wait_command();
+        }
+    }
+    else
+    {
+        if(current_page < pages.size() - 1)
+        {
+            MWindow::instance->reset_undo();
+            current_page++;
+            MWindow::instance->show_page(current_page, lock_it);
+        }
+    }
+}
+
+void Reader::prev_page(int step, int lock_it)
+{
+//printf("prev_page %d\n", __LINE__);
     if(current_page > 0)
     {
-#ifdef TWO_PAGE
-        MWindow::instance->reset_undo();
-        current_page -= step;
-        if(current_page < 0)
+        if(display_mode == TWO_PAGE)
         {
-            current_page = 0;
+            MWindow::instance->reset_undo();
+            current_page -= step;
+            if(current_page < 0)
+            {
+                current_page = 0;
+            }
+            int temp = current_page + 1;
+            send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
+            MWindow::instance->show_page(current_page, lock_it);
+            wait_command();
         }
-        int temp = current_page + 1;
-        send_command(SHOW_PAGE, (uint8_t*)&temp, sizeof(int));
-        MWindow::instance->show_page(current_page, lock_it);
-        wait_command();
-#else
-        MWindow::instance->reset_undo();
-        current_page--;
-        MWindow::instance->show_page(current_page, lock_it);
-#endif
+        else
+        {
+            MWindow::instance->reset_undo();
+            current_page--;
+            MWindow::instance->show_page(current_page, lock_it);
+        }
     }
 }
 
-// called from MenuWindow
-void do_capture()
-{
-    mode = CAPTURE_MODE;
-    MWindow::instance->current_operation = IDLE;
-
-    MenuWindow::instance->hide_windows(0);
-    CaptureMenu::instance->show();
-    Capture::instance->draw_score();
-}
-
-void do_reader()
+void Reader::do_reader()
 {
     mode = READER_MODE;
     MWindow::instance->current_operation = IDLE;
@@ -227,6 +231,7 @@ void do_reader()
     MWindow::instance->show_page(current_page, 1);
 }
 
+#ifdef RASPIAN
 void update_button_state(button_state_t *ptr, int value)
 {
     ptr->got_it = 0;
@@ -285,7 +290,6 @@ void update_button_state(button_state_t *ptr, int value)
     }
 }
 
-#ifndef USE_WINDOW
 void* button_thread(void *ptr)
 {
     int ticks = 0;
@@ -297,23 +301,23 @@ void* button_thread(void *ptr)
 
 //         printf("button_thread %d %d %d\n", 
 //             __LINE__,
-//             digitalRead(UP),
-//             digitalRead(DOWN));
-//         if(up_button.got_it)
-//         {
-//             printf("UP\n");
-//         }
-//         if(down_button.got_it)
-//         {
-//             printf("DOWN\n");
-//         }
-//         if(!(ticks % BUTTON_HZ))
-//         {
+//             digitalRead(UP_GPIO),
+//             digitalRead(DOWN_GPIO));
+        if(up_button.got_it)
+        {
+            printf("UP\n");
+        }
+        if(down_button.got_it)
+        {
+            printf("DOWN\n");
+        }
+        if(!(ticks % BUTTON_HZ))
+        {
 //             printf("button_thread %d %d %d\n", 
 //                 __LINE__,
 //                 up_button.time,
 //                 down_button.time);
-//         }
+        }
 
         if(up_button.value)
         {
@@ -323,7 +327,7 @@ void* button_thread(void *ptr)
                 {
                     up_button.next_time = up_button.time + REPEAT2;
                 }
-                next_page(2, 1);
+                Reader::instance->next_page(2, 1);
             }
         }
         else
@@ -335,7 +339,7 @@ void* button_thread(void *ptr)
                 {
                     down_button.next_time = down_button.time + REPEAT2;
                 }
-                prev_page(2, 1);
+                Reader::instance->prev_page(2, 1);
             }
         }
         
@@ -343,7 +347,7 @@ void* button_thread(void *ptr)
         ticks++;
     }
 }
-#endif // !USE_WINDOW
+#endif // RASPIAN
 
 
 void* client_thread(void *ptr)
@@ -394,7 +398,7 @@ void* client_thread(void *ptr)
         int write_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
         struct sockaddr_in write_addr;
         write_addr.sin_family = AF_INET;
-        write_addr.sin_port = htons((unsigned short)server_port);
+        write_addr.sin_port = htons((unsigned short)client_port);
         write_addr.sin_addr.s_addr = peer_addr.sin_addr.s_addr;
         
         if(connect(write_socket, 
@@ -421,10 +425,10 @@ void* client_thread(void *ptr)
         switch(id)
         {
             case LOAD_FILE:
-                result = load_file((char*)(packet + 1));
+                result = Reader::instance->load_file((char*)(packet + 1));
                 break;
             case LOAD_ANNOTATIONS:
-                result = load_annotations();
+                result = Reader::instance->load_annotations();
                 if(!result)
                 {
                     MWindow::instance->show_page(current_page, 1);
@@ -447,7 +451,7 @@ void* server_thread(void *ptr)
     int read_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     struct sockaddr_in read_addr;
     read_addr.sin_family = AF_INET;
-    read_addr.sin_port = htons((unsigned short)server_port);
+    read_addr.sin_port = htons((unsigned short)client_port);
     read_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	if(bind(read_socket, 
 		(struct sockaddr*)&read_addr, 
@@ -542,7 +546,7 @@ void* server_thread(void *ptr)
     }
 }
 
-int send_command(int id, uint8_t *value, int value_size)
+int Reader::send_command(int id, uint8_t *value, int value_size)
 {
     command[0] = id;
 //    command[1] = command_counter++;
@@ -552,7 +556,7 @@ int send_command(int id, uint8_t *value, int value_size)
     command_ready.unlock();
 }
 
-int wait_command()
+int Reader::wait_command()
 {
     command_done.lock();
     return command_result;
@@ -598,7 +602,7 @@ void get_annotation_path(char *dst, char *src)
     }
 }
 
-int save_annotations()
+int Reader::save_annotations()
 {
     char path[BCTEXTLEN];
     if(reader_path[0] && pages.size() > 0)
@@ -633,22 +637,21 @@ int save_annotations()
     return 1;
 }
 
-int save_annotations_entry()
+int Reader::save_annotations_entry()
 {
-#ifdef TWO_PAGE
     int result = save_annotations();
-    send_command(LOAD_ANNOTATIONS, 
-        0, 
-        0);
-    wait_command();
-#else
-    int result = save_annotations();
-#endif
+    if(display_mode == TWO_PAGE)
+    {
+        send_command(LOAD_ANNOTATIONS, 
+            0, 
+            0);
+        wait_command();
+    }
     return result;
 }
 
 
-int load_annotations()
+int Reader::load_annotations()
 {
     char path[BCTEXTLEN];
     if(reader_path[0] && pages.size() > 0)
@@ -699,7 +702,7 @@ int load_annotations()
     }
 }
 
-int load_file(const char *path)
+int Reader::load_file(const char *path)
 {
     int i;
     printf("load_file %d: loading %s\n", __LINE__, path);
@@ -790,7 +793,7 @@ int load_file(const char *path)
     return 0;
 }
 
-void load_file_entry(const char *path)
+void Reader::load_file_entry(const char *path)
 {
     if(file_changed)
     {
@@ -804,15 +807,18 @@ void load_file_entry(const char *path)
     MWindow::instance->start_hourglass();
     MWindow::instance->unlock_window();
 
-#ifdef TWO_PAGE
-    send_command(LOAD_FILE, 
-        (uint8_t*)path, 
-        strlen(path) + 1);
-    ::load_file(path);
-    wait_command();
-#else
-    ::load_file(path);
-#endif
+    if(display_mode == TWO_PAGE)
+    {
+        Reader::instance->send_command(LOAD_FILE, 
+            (uint8_t*)path, 
+            strlen(path) + 1);
+        Reader::instance->load_file(path);
+        Reader::instance->wait_command();
+    }
+    else
+    {
+        Reader::instance->load_file(path);
+    }
 
     MenuWindow::instance->lock_window();
     MenuWindow::instance->save->set_images(MWindow::instance->theme->get_image_set("save"));
@@ -839,7 +845,6 @@ int main(int argc, char *argv[])
 //    const char *path = 0;
     client_address[0] = 0;
     client_port = -1;
-    server_port = -1;
 
 // load the image file
     if(argc > 1)
@@ -852,7 +857,7 @@ int main(int argc, char *argv[])
                 client_mode = 1;
                 if(i >= argc)
                 {
-                    printf("-c needs a client port\n");
+                    printf("-c needs a server port\n");
                     exit(1);
                 }
                 else
@@ -860,24 +865,12 @@ int main(int argc, char *argv[])
                     i++;
                     client_port = atoi(argv[i]);
                 }
-                
-                if(i >= argc)
-                {
-                    printf("-c needs a server port\n");
-                    exit(1);
-                }
-                else
-                {
-                    i++;
-                    server_port = atoi(argv[i]);
-                }
             }
             else
             {
 // enter server mode
 // split the client address
-#ifdef TWO_PAGE
-                if(client_address[0] == 0)
+                if(Reader::display_mode == TWO_PAGE)
                 {
                     char *ptr = strchr(argv[i], ':');
                     if(ptr)
@@ -893,12 +886,8 @@ int main(int argc, char *argv[])
                         exit(1);
                     }
                 }
-                else
-                {
-                    server_port = atoi(argv[i]);
-                }
-#endif // TWO_PAGE
             }
+
 //             if(!strcmp(argv[i], "-e"))
 //             {
 //                 i++;
@@ -929,6 +918,8 @@ int main(int argc, char *argv[])
 //    init_brushes();
     MWindow::init_colors();
     MWindow::instance = new MWindow;
+
+    Reader::instance = new Reader;
     Capture::instance = new Capture;
     CaptureMIDI::instance = new CaptureMIDI;
 
@@ -938,7 +929,7 @@ int main(int argc, char *argv[])
 
     if(!client_mode && client_address[0])
     {
-        if(server_port < 0)
+        if(client_port < 0)
         {
             printf("Server port not specified\n");
             exit(1);
@@ -953,14 +944,14 @@ int main(int argc, char *argv[])
 //         }
 
 // enable the GPIOs
-#ifndef USE_WINDOW
+#ifdef RASPIAN
         wiringPiSetup() ;
         pinMode(UP_GPIO, INPUT);
         pinMode(DOWN_GPIO, INPUT);
         pullUpDnControl(UP_GPIO, PUD_UP);
         pullUpDnControl(DOWN_GPIO, PUD_UP);
         pthread_create(&tid, &attr, button_thread, 0);
-#endif // !USE_WINDOW
+#endif // RASPIAN
     }
     else
     if(client_mode)
@@ -1006,7 +997,7 @@ int main(int argc, char *argv[])
     MWindow::instance->run_window();
     if(file_changed)
     {
-        save_annotations();
+        Reader::instance->save_annotations();
     }
     MWindow::instance->save_defaults();
     return 0;

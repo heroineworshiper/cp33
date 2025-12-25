@@ -74,11 +74,6 @@ MWindow::MWindow() : BC_Window()
     zoom_x = 0;
     zoom_y = 0;
     zoom_factor = 1;
-
-// border must be disabled in FVWM
-//#ifndef USE_WINDOW
-//    set_border(0);
-//#endif
 };
 
 static void to_rgb888(uint8_t *dst, uint32_t src)
@@ -148,9 +143,8 @@ void MWindow::create_objects()
     root_h = get_h();
     if(client_mode)
     {
-#ifndef ONE_SCREEN
-        set_cursor(TRANSPARENT_CURSOR, 0, 0);
-#endif
+        if(Reader::display_mode != ONE_SCREEN)
+            set_cursor(TRANSPARENT_CURSOR, 0, 0);
     }
     else
     {
@@ -218,7 +212,7 @@ void MWindow::load_defaults()
 
 
     char string[BCTEXTLEN];
-    if(mode == READER_MODE)
+    if(Reader::mode == READER_MODE)
         sprintf(string, "*%s", READER_SUFFIX);
     else
         sprintf(string, "*.txt");
@@ -315,7 +309,7 @@ void MWindow::push_undo_after()
 
 void MWindow::pop_undo()
 {
-    if(mode == CAPTURE_MODE)
+    if(Reader::mode == CAPTURE_MODE)
     {
         Capture::instance->pop_undo();
     }
@@ -335,7 +329,7 @@ void MWindow::pop_undo()
 
 void MWindow::pop_redo()
 {
-    if(mode == CAPTURE_MODE)
+    if(Reader::mode == CAPTURE_MODE)
     {
         Capture::instance->pop_redo();
     }
@@ -750,30 +744,30 @@ int MWindow::keypress_event()
     switch(get_keypress())
     {
         case LEFT:
-            if(mode == READER_MODE)
-                prev_page(2, 0);
+            if(Reader::mode == READER_MODE)
+                Reader::instance->prev_page(2, 0);
             else
                 Capture::instance->prev_beat();
             break;
 
         case RIGHT:
-            if(mode == READER_MODE)
-                next_page(2, 0);
+            if(Reader::mode == READER_MODE)
+                Reader::instance->next_page(2, 0);
             else
                 Capture::instance->next_beat();
             break;
 
         case UP:
-            if(mode == CAPTURE_MODE)
+            if(Reader::mode == CAPTURE_MODE)
                 Capture::instance->prev_staff();
             break;
         case DOWN:
-            if(mode == CAPTURE_MODE)
+            if(Reader::mode == CAPTURE_MODE)
                 Capture::instance->next_staff();
             break;
 
         case 'd':
-            if(mode == CAPTURE_MODE) Score::instance->dump();
+            if(Reader::mode == CAPTURE_MODE) Score::instance->dump();
             break;
 
         case 'z':
@@ -793,7 +787,7 @@ int MWindow::button_press_event()
     if(client_mode) return 0;
 
 
-    if(mode == CAPTURE_MODE)
+    if(Reader::mode == CAPTURE_MODE)
     {
         Capture::instance->button_press_event();
         return 1;
@@ -870,7 +864,7 @@ int MWindow::button_release_event()
 {
     if(client_mode) return 0;
 
-    if(mode == CAPTURE_MODE)
+    if(Reader::mode == CAPTURE_MODE)
     {
         return 1;
     }
@@ -1028,7 +1022,7 @@ printf("MWindow::button_press_event %d\n", __LINE__);
 int MWindow::cursor_motion_event()
 {
     int need_cursor = 0;
-    if(mode == CAPTURE_MODE)
+    if(Reader::mode == CAPTURE_MODE)
     {
         return Capture::instance->cursor_motion_event();
     }
@@ -1804,7 +1798,7 @@ void MWindow::draw_line_preview(int x1, int y1, int x2, int y2)
 
 void MWindow::draw_cursor()
 {
-    if(mode == CAPTURE_MODE)
+    if(Reader::mode == CAPTURE_MODE)
     {
         Capture::instance->draw_cursor();
         return;
@@ -2063,13 +2057,13 @@ void MWindow::update_cursor(int x, int y)
 {
     hide_cursor();
 
-    if(mode == CAPTURE_MODE ||
+    if(Reader::mode == CAPTURE_MODE ||
         current_operation != IDLE)
     {
 // show new cursor position
         cursor_x = x;
         cursor_y = y;
-        if(mode == CAPTURE_MODE ||
+        if(Reader::mode == CAPTURE_MODE ||
             (current_operation != IDLE &&
             x >= 0 && 
             y >= 0))

@@ -29,13 +29,6 @@
 
 
 
-// enable 2 page mode using the client
-//#ifndef USE_WINDOW
-//#define TWO_PAGE
-//#endif // USE_WINDOW
-
-// 2 pages on 1 monitor
-//#define ONE_SCREEN
 
 #define ROOT_W 768
 #define ROOT_H 1366
@@ -93,7 +86,6 @@
 #define DRAW_8VA_END 11
 #define CAPTURE_REST 12
 #define CAPTURE_KEY 13
-#define CAPTURE_MIDI 14
 
 
 
@@ -104,21 +96,37 @@ extern int file_changed;
 extern int current_page;
 
 
+
+class Reader
+{
+public:
+    Reader();
+
+    int save_annotations();
+    int save_annotations_entry();
+    int load_annotations();
+    int load_file(const char *path);
+    void load_file_entry(const char *path);
+    int send_command(int id, uint8_t *value, int value_size);
+    int wait_command();
+    void prev_page(int step, int lock_it);
+    void next_page(int step, int lock_it);
+    void do_reader();
+    
+    static Reader *instance;
+// editing mode
+    static int mode;
 #define READER_MODE 0
 #define CAPTURE_MODE 1
-extern int mode;
 
-int save_annotations();
-int save_annotations_entry();
-int load_annotations();
-int load_file(const char *path);
-void load_file_entry(const char *path);
-int send_command(int id, uint8_t *value, int value_size);
-int wait_command();
-void prev_page(int step, int lock_it);
-void next_page(int step, int lock_it);
-void do_capture();
-void do_reader();
+
+// reader display configurations
+    static int display_mode;
+#define ONE_PAGE 0 // 1 page on 1 monitor
+#define TWO_PAGE 1 // 2 page mode using the client
+#define ONE_SCREEN 2 // 2 pages on 1 monitor
+};
+
 
 
 class Page

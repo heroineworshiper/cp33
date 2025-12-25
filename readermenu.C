@@ -97,7 +97,7 @@ BC_Window* LoadFileThread::new_gui()
 
 
     char string[BCTEXTLEN];
-    if(mode == READER_MODE)
+    if(Reader::mode == READER_MODE)
         sprintf(string, "*%s", READER_SUFFIX);
     else
         sprintf(string, "*.txt");
@@ -125,8 +125,8 @@ void LoadFileThread::handle_done_event(int result)
 
     if(result == 0)
     {
-        if(mode == READER_MODE)
-            ::load_file_entry(gui->get_submitted_path());
+        if(Reader::mode == READER_MODE)
+            Reader::instance->load_file_entry(gui->get_submitted_path());
         else
             Capture::instance->load_score(gui->get_submitted_path());
     }
@@ -299,7 +299,7 @@ Save::Save(int x, int y)
 int Save::handle_event()
 {
     start_hourglass();
-    if(!save_annotations_entry())
+    if(!Reader::instance->save_annotations_entry())
     {
         set_images(MWindow::instance->theme->get_image_set("save"));
         draw_face(1);
@@ -356,7 +356,7 @@ PrevPage::PrevPage(int x, int y)
 int PrevPage::handle_event()
 {
     unlock_window();
-    prev_page(1, 1);
+    Reader::instance->prev_page(1, 1);
     lock_window();
     return 1;
 }
@@ -370,7 +370,7 @@ NextPage::NextPage(int x, int y)
 int NextPage::handle_event()
 {
     unlock_window();
-    next_page(1, 1);
+    Reader::instance->next_page(1, 1);
     lock_window();
     return 1;
 }
@@ -383,7 +383,7 @@ CaptureButton::CaptureButton(int x, int y)
 
 int CaptureButton::handle_event()
 {
-    do_capture();
+    Capture::instance->do_capture();
     return 1;
 }
 

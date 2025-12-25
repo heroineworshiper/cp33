@@ -19,7 +19,9 @@
  */
 
 #include "capture.h"
+#include "capturemenu.h"
 #include "capturemidi.h"
+#include "score.h"
 #include "sema.h"
 #include <fcntl.h>
 #include <stdio.h>
@@ -28,8 +30,16 @@
 #include <unistd.h>
 
 #define MIDI_DEVICE "/dev/midi1"
-#define MIDI_NOTEON 0x90
+#define MIDI_NOTE 0x90
+#define MIDI_PEDAL 0xb0
+    #define MIDI_RIGHT_PEDAL 0x40
+    #define MIDI_LEFT_PEDAL 0x43
+#define MIDI_ALIVE 0xf8
 
+// midi delays
+#define REPEAT_COUNT1 25
+#define REPEAT_COUNT2 4
+#define MIDI_DEBOUNCE 4
 
 // test MIDI input
 uint8_t e_minor[] =
@@ -57,9 +67,9 @@ CaptureMIDI* CaptureMIDI::instance = 0;
 CaptureMIDI::CaptureMIDI()
  : Thread()
 {
-    command_ready = new Sema;
-    command_done = new Sema;
-    done = 0;
+    command_ready = new Sema(0);
+    command_done = new Sema(0);
+    done = 1;
 }
 
 void CaptureMIDI::initialize()
@@ -84,78 +94,200 @@ void CaptureMIDI::run()
         {
             int left_pedal = 0;
             int right_pedal = 0;
+            int repeat_counter = 0;
+            int repeat_time = 0;
+            int left_debounce = 0;
+            int right_debounce = 0;
+#define GET_START_CODE 0
+#define GET_DATA 1
+            int state = GET_START_CODE;
+            int counter = 0;
+            int size = 0;
+            uint8_t packet[4];
             while(!done)
             {
-                uint8_t packet[4];
-                bzero(packet, 4);
-                int result = read(fd, packet, sizeof(packet));
+                uint8_t c;
+                int result = read(fd, &c, 1);
                 if(result <= 0)
                 {
                     printf("CaptureMIDI::run %d: unplugged\n", __LINE__);
                     break;
                 }
 
-
-                switch(packet[0])
+                if(state == GET_START_CODE)
                 {
-                    case 0xb0:
-                        if(packet[1] == 0x40)
-                        {
-// right pedal
-                            int value = packet[2];
-                            if(value == 0 && right_pedal)
-                            {
-// up
-                                right_pedal = 0;
-                            }
-                            else
-                            if(value != 0 && !right_pedal)
-                            {
-// down
-                                right_pedal = 1;
-                                Capture::instance->next_beat();
-                            }
-                        }
-                        else
-                        if(packet[1] = 0x43)
-                        {
-// left pedal
-                            int value = packet[2];
-                            if(value == 0 && left_pedal)
-                            {
-// up
-                                left_pedal = 0;
-                            }
-                            else
-                            if(value != 0 && !left_pedal)
-                            {
-// down
-                                left_pedal = 1;
-                                Capture::instance->prev_beat();
-                            }
-                        }
-                        break;
-                    case 0x90:
+                    if(c == MIDI_NOTE ||
+                        c == MIDI_PEDAL)
                     {
-// key event
-                        int note = packet[1];
-                        int velocity = packet[2];
-                        if(velocity > 0)
+                        state = GET_DATA;
+                        bzero(packet, sizeof(packet));
+                        packet[0] = c;
+                        counter = 1;
+                        size = 3;
+                    }
+                    else
+                    if(c == MIDI_ALIVE)
+                    {
+                        if(repeat_time > 0)
                         {
-// down
-                            
+                            repeat_counter++;
+                            if(repeat_counter >= repeat_time)
+                            {
+                                repeat_counter = 0;
+                                repeat_time = REPEAT_COUNT2;
+                                if(left_pedal) Capture::instance->prev_beat();
+                                if(right_pedal) Capture::instance->next_beat();
+                            }
                         }
-                        break;
+                        if(left_debounce > 0) left_debounce--;
+                        if(right_debounce > 0) right_debounce--;
+                    }
+                }
+                else
+                {
+                    packet[counter++] = c;
+                    if(counter >= size)
+                    {
+                        state = GET_START_CODE;
+
+                        switch(packet[0])
+                        {
+                            case MIDI_PEDAL:
+                                if(packet[1] == MIDI_RIGHT_PEDAL)
+                                {
+        // right pedal
+                                    int value = packet[2];
+                                    if(value == 0 && right_pedal)
+                                    {
+        // up
+                                        right_pedal = 0;
+                                        repeat_time = 0;
+                                    }
+                                    else
+                                    if(value > 0x70 && !right_pedal && right_debounce <= 0)
+                                    {
+        // down
+                                        right_pedal = 1;
+                                        left_pedal = 0;
+                                        repeat_time = REPEAT_COUNT1;
+                                        repeat_counter = 0;
+                                        right_debounce = MIDI_DEBOUNCE;
+                                        Capture::instance->next_beat();
+                                    }
+                                }
+                                else
+                                if(packet[1] = MIDI_LEFT_PEDAL)
+                                {
+        // left pedal
+                                    int value = packet[2];
+                                    if(value == 0 && left_pedal)
+                                    {
+        // up
+                                        left_pedal = 0;
+                                        repeat_time = 0;
+                                    }
+                                    else
+                                    if(value > 0x70 && !left_pedal && left_debounce <= 0)
+                                    {
+        // down
+                                        left_pedal = 1;
+                                        right_pedal = 0;
+                                        repeat_time = REPEAT_COUNT1;
+                                        repeat_counter = 0;
+                                        left_debounce = MIDI_DEBOUNCE;
+                                        Capture::instance->prev_beat();
+                                    }
+                                }
+                                break;
+
+                            case MIDI_NOTE:
+                            {
+        // key event
+                                int note = packet[1];
+                                int velocity = packet[2];
+                                if(velocity > 0)
+                                {
+        // down
+        // test for chord at the current position
+                                    Score *score = Score::instance;
+                                    int got_it = 0;
+                                    Group *group = 0;
+                                    if(current_staff < score->staves.size())
+                                    {
+                                        Capture::instance->push_undo_before();
+
+                                        Staff *staff = score->staves.get(current_staff);
+                                        for(int i = 0; i < staff->groups.size(); i++)
+                                        {
+                                            group = staff->groups.get(i);
+                                            if(group->time == selection_start)
+                                            {
+                                                got_it = 1;
+                                                if(group->type != IS_CHORD)
+                                                {
+// insert before the beat & shift all right
+                                                    group = new Group(selection_start, IS_CHORD);
+                                                    staff->groups.insert(group, i);
+                                                    for(int j = 0; j < staff->groups.size(); j++)
+                                                    {
+                                                        Group *group2 = staff->groups.get(j);
+                                                        if(j >= i + 1)
+                                                            group2->time += 1;
+// extend 8va
+                                                        if(group2->type == IS_OCTAVE &&
+                                                            group2->time <= selection_start &&
+                                                            group2->time + group2->length > selection_start)
+                                                        {
+                                                            group2->time += 1;
+                                                        }
+                                                    }
+                                                }
+                                                break;
+                                            }
+                                            else
+                                            if(group->time > selection_start)
+                                            {
+// insert before the beat & don't shift right
+                                                got_it = 1;
+                                                group = new Group(selection_start, IS_CHORD);
+                                                staff->groups.insert(group, i);
+                                                break;
+                                            }
+                                        }
+// after end of staff
+                                        if(!got_it)
+                                        {
+                                            group = new Group(selection_start, IS_CHORD);
+                                            staff->groups.append(group);
+                                            got_it = 1;
+                                        }
+
+                                        if(got_it)
+                                        {
+                                            group->append(new Note(0, note));
+                                            score->clean();
+                                            score_changed = 1;
+                                            CaptureMenu::instance->update_save();
+                                            Capture::instance->draw_score(1, 1);
+                                        }
+                                        
+                                        Capture::instance->push_undo_after();
+                                    }
+                                }
+                                break;
+                            }
+                        }
                     }
                 }
 
-//                if(packet[0] != 0xf8 && packet[0] != 0xfe)
-                    printf("0x%02x, 0x%02x, 0x%02x, 0x%02x,\n", 
-                        packet[0],
-                        packet[1],
-                        packet[2],
-                        packet[3]);
-                fflush(stdout);
+
+//                 if(packet[0] != 0xf8 && packet[0] != 0xfe)
+//                     printf("0x%02x, 0x%02x, 0x%02x, 0x%02x,\n", 
+//                         packet[0],
+//                         packet[1],
+//                         packet[2],
+//                         packet[3]);
+//                 fflush(stdout);
             }
 
             close(fd);
@@ -167,14 +299,20 @@ void CaptureMIDI::run()
 
 void CaptureMIDI::start_recording()
 {
-    done = 0;
-    command_ready->unlock();
+    if(done)
+    {
+        done = 0;
+        command_ready->unlock();
+    }
 }
 
 void CaptureMIDI::stop_recording()
 {
-    done = 1;
-    command_done->lock();
+    if(!done)
+    {
+        done = 1;
+        command_done->lock();
+    }
 }
 
 

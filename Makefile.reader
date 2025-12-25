@@ -6,7 +6,9 @@ CXXFLAGS := -g -O3 -std=c++11 -Iguicast
 # assume it's being built against a Cinelerra library
 # which had HAVE_GL defined
 ifeq ($(OBJDIR), x86_64)
-CXXFLAGS += -DUSE_WINDOW -DHAVE_GL
+CXXFLAGS += -DHAVE_GL
+else
+CXXFLAGS += -DRASPIAN
 endif
 
 PNGS := \

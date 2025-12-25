@@ -26,6 +26,7 @@
 #include "capture.h"
 #include "capturemenu.h"
 #include "mwindow.h"
+#include "readermenu.h"
 #include "readertheme.h"
 #include "score.h"
 #include <stdint.h>
@@ -107,6 +108,32 @@ uint32_t keysigs[] =
 
 
 
+
+CaptureUndo::CaptureUndo()
+{
+    score = new Score;
+}
+
+CaptureUndo::~CaptureUndo()
+{
+    delete score;
+}
+
+
+void CaptureUndo::setup()
+{
+    this->current_staff = ::current_staff;
+    this->selection_start = ::selection_start;
+    this->selection_end = ::selection_end;
+    this->score_changed = ::score_changed;
+    score->copy_from(Score::instance);
+}
+
+
+
+
+
+
 Capture* Capture::instance = 0;
 
 Capture::Capture()
@@ -121,6 +148,16 @@ void Capture::reset_undo()
     total_undos = 0;
 }
 
+
+// called from MenuWindow
+void Capture::do_capture()
+{
+    Reader::mode = CAPTURE_MODE;
+    MWindow::instance->current_operation = IDLE;
+    MenuWindow::instance->hide_windows(0);
+    CaptureMenu::instance->show();
+    draw_score();
+}
 
 void Capture::create_objects()
 {
@@ -145,32 +182,6 @@ void Capture::create_objects()
     end_8va = new BC_Pixmap(mwindow, theme->new_image("end_8va.png"), PIXMAP_ALPHA);
     rest = new BC_Pixmap(mwindow, theme->new_image("qrest2.png"), PIXMAP_ALPHA);
 }
-
-
-
-
-CaptureUndo::CaptureUndo()
-{
-    score = new Score;
-}
-
-CaptureUndo::~CaptureUndo()
-{
-    delete score;
-}
-
-
-void CaptureUndo::setup()
-{
-    this->current_staff = ::current_staff;
-    this->selection_start = ::selection_start;
-    this->selection_end = ::selection_end;
-    this->score_changed = ::score_changed;
-    score->copy_from(Score::instance);
-}
-
-
-
 
 // always centered around X=0
 void Capture::process_group(Staff *staff, Group *group)
@@ -403,7 +414,7 @@ void Capture::process_group(Staff *staff, Group *group)
                 {
 //printf("MWindow::process_group %d\n", __LINE__);
 // not on the major scale
-                    if(key_is_flat[current_key])
+                    if(!key_is_flat[current_key])
                     {
 // add a sharp to get on a major note
                         scale_position--;
@@ -504,6 +515,7 @@ void Capture::process_group(Staff *staff, Group *group)
                     DrawObject *object = group->images.get(k);
                     if(object->pixmap == quarter &&
                         x < object->x + quarter->get_w() && 
+                        x + quarter->get_w() > object->x &&
                         y + quarter->get_h() > object->y)
                     {
 // printf("MWindow::process_group %d %d %d %d\n",
@@ -715,6 +727,8 @@ void Capture::draw_score(int do_flash, int do_lock)
     Score *score = Score::instance;
     int margin = 5;
     char temp[BCTEXTLEN];
+    
+    mwindow->cursor_visible = 0;
 // reset the temporaries
     score->beats.remove_all_objects();
     score->lines.remove_all_objects();
@@ -760,6 +774,8 @@ void Capture::draw_score(int do_flash, int do_lock)
     int x2 = mwindow->root_w - margin;
 // available pixels in the current line
     int line_w = x2 - x1;
+// advance the cursor 1 line
+    int dangling_cursor = 0;
 
 
     cursor_x1 = cursor_x2 = -1;
@@ -803,6 +819,12 @@ void Capture::draw_score(int do_flash, int do_lock)
                 prev_x, 
                 BEAT_PAD + cleff_w + key_w,
                 score->staves.size()));
+// advance the cursor 1 line so it isn't after the end of a line
+            if(dangling_cursor)
+            {
+                selection_line = score->lines.size() - 1;
+                dangling_cursor = 0;
+            }
 
 // compute the min & max Y from the 8va extensions
             for(int i = 0; i < score->staves.size(); i++)
@@ -883,6 +905,9 @@ void Capture::draw_score(int do_flash, int do_lock)
         {
             cursor_x1 = x;
             cursor_x2 = x;
+            selection_line = score->lines.size() - 1;
+            dangling_cursor = 1;
+//printf("Capture::draw_score %d x=%d\n", __LINE__, x);
         }
         score->beats.append(new Beat(current_time, x));
 
@@ -928,7 +953,6 @@ void Capture::draw_score(int do_flash, int do_lock)
         {
 //printf("MWindow::draw_score %d x=%d line->x1=%d line_w=%d current_time=%f\n",
 //__LINE__, x, line->x1, line_w, current_time);
-
             line->end_time = current_time;
 
 // get y of each staff
@@ -962,6 +986,11 @@ void Capture::draw_score(int do_flash, int do_lock)
             }
 
             new_line = 1;
+        }
+        else
+        {
+// cursor is not after the last beat on a line
+            dangling_cursor = 0;
         }
 
 // if we hit the end of the score, quit
@@ -1015,6 +1044,7 @@ void Capture::draw_score(int do_flash, int do_lock)
 //printf("MWindow::draw_score %d lines=%d\n", __LINE__, score->lines.size());
     for(int line_n = 0; line_n < score->lines.size(); line_n++)
     {
+        int staves = score->staves.size();
         line = score->lines.get(line_n);
         current_time = line->start_time;
 //printf("MWindow::draw_score %d line=%d current_time=%f\n",
@@ -1040,7 +1070,16 @@ void Capture::draw_score(int do_flash, int do_lock)
             }
 
             mwindow->set_color(BLUE);
-            mwindow->draw_box(cursor_x1 - line->x1 + line->x_pad, 
+// full height of line
+            int x = cursor_x1 - line->x1 + line->x_pad;
+            mwindow->set_line_dashes(1);
+            mwindow->BC_Window::draw_line(x,
+                line->y1.get(0) + line->min_y.get(0),
+                x,
+                line->y1.get(staves - 1) + line->max_y.get(staves - 1));
+            mwindow->set_line_dashes(0);
+// selected staff only
+            mwindow->draw_box(x, 
                 cursor_y1, 
                 cursor_x2 - cursor_x1, 
                 cursor_y2 - cursor_y1);
@@ -1275,7 +1314,6 @@ void Capture::button_press_event()
             }
             if(redraw)
             {
-                mwindow->cursor_visible = 0;
                 draw_score(1, 0);
                 mwindow->update_cursor(mwindow->get_cursor_x(),
                     mwindow->get_cursor_y());
@@ -1430,7 +1468,6 @@ void Capture::button_press2(int line_n, Beat *beat, int staff_n)
     
     if(redraw)
     {
-        mwindow->cursor_visible = 0;
         draw_score(1, 0);
         mwindow->update_cursor(mwindow->get_cursor_x(),
             mwindow->get_cursor_y());
@@ -1447,6 +1484,7 @@ int Capture::cursor_motion_event()
         mwindow->current_operation == RECORD_MIDI ||
         mwindow->current_operation == IDLE)
     {
+
         mwindow->update_cursor(mwindow->get_cursor_x(), 
             mwindow->get_cursor_y());
         mwindow->flush();
@@ -1531,7 +1569,7 @@ void Capture::draw_cursor()
     if(mwindow->current_operation == DRAW_8VA_START ||
         mwindow->current_operation == DRAW_8VA_END ||
         mwindow->current_operation == CAPTURE_REST ||
-        mwindow->current_operation == CAPTURE_MIDI ||
+        mwindow->current_operation == RECORD_MIDI ||
         mwindow->current_operation == CAPTURE_KEY ||
         mwindow->current_operation == IDLE)
     {
@@ -1703,6 +1741,8 @@ void Capture::new_score()
     group->cleff = BASS;
 
     score_changed = 0;
+    selection_start = selection_end = treble->max_beat();
+    current_staff = 0;
     CaptureMenu::instance->update_save();
     push_undo_after();
 
@@ -1900,7 +1940,7 @@ int Capture::load_score(char *path)
     }
 
 //    Score::instance->dump();
-    draw_score();
+    draw_score(1, 1);
 
     return result;
 }
@@ -1913,15 +1953,15 @@ void Capture::prev_beat()
     {
         selection_start -= 1;
         selection_end = selection_start;
-        draw_score();
+        draw_score(1, 1);
     }
     else
     if(current_staff < score->staves.size())
     {
-        double max_beat = score->staves.get(current_staff)->max_beat();
+        double max_beat = score->max_beat();
         selection_start = max_beat;
         selection_end = selection_start;
-        draw_score();
+        draw_score(1, 1);
     }
 }
 
@@ -1932,11 +1972,13 @@ void Capture::next_beat()
     if(current_staff < score->staves.size())
     {
         selection_start += 1;
-        double max_beat = score->staves.get(current_staff)->max_beat();
+        double max_beat = score->max_beat();
+// printf("Capture::next_beat %d selection_start=%f max_beat=%f\n", 
+// __LINE__, selection_start, max_beat);
         if(selection_start > max_beat)
             selection_start = 0;
         selection_end = selection_start;
-        draw_score();
+        draw_score(1, 1);
     }
 }
 
@@ -1952,11 +1994,11 @@ void Capture::prev_staff()
 
     if(current_staff < score->staves.size())
     {
-        double max_beat = score->staves.get(current_staff)->max_beat();
+        double max_beat = score->max_beat();
         if(selection_start > max_beat)
             selection_start = max_beat;
         selection_end = selection_start;
-        draw_score();
+        draw_score(1, 1);
     }
 }
 
@@ -1970,11 +2012,11 @@ void Capture::next_staff()
 
     if(current_staff < score->staves.size())
     {
-        double max_beat = score->staves.get(current_staff)->max_beat();
+        double max_beat = score->max_beat();
         if(selection_start > max_beat)
             selection_start = max_beat;
         selection_end = selection_start;
-        draw_score();
+        draw_score(1, 1);
     }
 }
 

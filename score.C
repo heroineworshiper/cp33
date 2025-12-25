@@ -91,6 +91,15 @@ void Score::test()
 
     time++;
 
+// stacked notes
+#if 0
+    group = treble->groups.append(new Group(time, IS_CHORD));
+    group->append(new Note(0, MIDDLE_C));
+    group->append(new Note(0, MIDDLE_D));
+    group->append(new Note(0, MIDDLE_E));
+    group->append(new Note(0, MIDDLE_F));
+#endif // 0
+
 
 // 8va tests
 // // bass 8va
@@ -159,10 +168,7 @@ void Score::test()
     group->append(new Note(0, MIDDLE_AF - OCTAVE));
     group->append(new Note(0, MIDDLE_DF));
     time++;
-#endif
 
-
-#if 1
 // treble F
     group = treble->groups.append(new Group(time, IS_CHORD));
     group->append(new Note(0, MIDDLE_F));
@@ -313,7 +319,7 @@ void Score::test()
 //             staff = bass;
     }
 
-#endif
+#endif // 1
 
     clean();
 //    dump();
@@ -355,6 +361,7 @@ double Score::max_beat()
 void Score::delete_beat()
 {
     Score *score = Score::instance;
+    double new_position = -1;
 
     for(int i = 0; i < staves.size(); i++)
     {
@@ -371,6 +378,7 @@ void Score::delete_beat()
                 if(group->time < selection_start)
                 {
                     start = j;
+                    new_position = group->time;
                     break;
                 }
             }
@@ -404,6 +412,7 @@ void Score::delete_beat()
                     Group *group = staff->groups.get(j);
                     group->time -= 1;
                 }
+                selection_start = selection_end = new_position;
             }
         }
     }
@@ -790,28 +799,23 @@ int Group::get_abs_y()
 // sort from lowest to highest to simplify drawing
 void Group::append(Note *note)
 {
-    int got_it = 0;
-    for(int i = notes.size() - 1; i >= 0; i--)
+    for(int i = 0; i < notes.size(); i++)
     {
-        if(notes.get(i)->pitch < note->pitch)
+        if(notes.get(i)->pitch > note->pitch)
         {
-            notes.insert_after(note, i);
-            got_it = 1;
-            break;
+            notes.insert(note, i);
+            return;
         }
         else
         if(notes.get(i)->pitch == note->pitch)
         {
-printf("Group::append %d exists\n", __LINE__);
-            got_it = 1;
-            break;
+            printf("Group::append %d exists\n", __LINE__);
+            delete note;
+            return;
         }
     }
-    
-    if(!got_it)
-    {
-        notes.append(note);
-    }
+
+    notes.append(note);
 }
 
 int Group::save(FILE *fd)

@@ -70,6 +70,7 @@ public:
     Capture();
 
     void create_objects();
+    void do_capture();
     void reset_undo();
     void push_undo_before();
     void push_undo_after();
