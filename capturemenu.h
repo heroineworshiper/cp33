@@ -79,6 +79,13 @@ public:
     int handle_event();
 };
 
+class CaptureBar : public BC_Toggle
+{
+public:
+    CaptureBar(int x, int y);
+    int handle_event();
+};
+
 class Start8va : public BC_Toggle
 {
 public:
@@ -116,6 +123,13 @@ public:
     int handle_event();
 };
 
+class BarsFollowEdits : public BC_Toggle
+{
+public:
+    BarsFollowEdits(int x, int y);
+    int handle_event();
+};
+
 class KeySelector : public BC_PopupTextBox
 {
 public:
@@ -143,6 +157,7 @@ public:
     Start8va *start_8va;
     End8va *end_8va;
     CaptureRest *rest;
+    CaptureBar *bar;
     KeyButton *key;
     KeySelector *key_selector;
     ArrayList <BC_ListBoxItem*> key_items;

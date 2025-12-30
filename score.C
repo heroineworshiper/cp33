@@ -56,12 +56,18 @@ int DrawObject::is_accidental()
 
 int DrawObject::get_x2()
 {
-    return x + pixmap->get_w();
+    if(pixmap)
+        return x + pixmap->get_w();
+    else
+        return x;
 }
 
 int DrawObject::get_y2()
 {
-    return y + pixmap->get_h();
+    if(pixmap)
+        return y + pixmap->get_h();
+    else
+        return y;
 }
 
 
@@ -281,6 +287,10 @@ void Score::test()
     for(int i = 0; i < 5; i++)
     {
 #define OCTAVES 0
+        group = treble->groups.append(new Group(time, IS_BAR));
+        group = bass->groups.append(new Group(time, IS_BAR));
+        time++;
+
         group = staff->groups.append(new Group(time++, IS_CHORD));
         group->append(new Note(0, MIDDLE_DF - OCTAVE * (OCTAVES + 1)));
         group = staff->groups.append(new Group(time++, IS_CHORD));
@@ -358,21 +368,23 @@ double Score::max_beat()
     return result;
 }
 
+// doesn't delete 8vas
 void Score::delete_beat()
 {
     Score *score = Score::instance;
     double new_position = -1;
+    Group *group = 0;
 
     for(int i = 0; i < staves.size(); i++)
     {
         if(current_staff == i || current_staff < 0)
         {
             Staff *staff = staves.get(i);
-// rewind 1 beat behind current position
+// discover the 1st object behind the current position
             int start = -1;
             for(int j = staff->groups.size() - 1; j >= 0; j--)
             {
-                Group *group = staff->groups.get(j);
+                group = staff->groups.get(j);
 //printf("Score::delete_beat %d j=%d time=%f selection_start=%f\n",
 //__LINE__, j, group->time, selection_start);
                 if(group->time < selection_start)
@@ -387,31 +399,14 @@ void Score::delete_beat()
 
             if(start >= 0)
             {
-                staff->groups.remove_object_number(start);
-
-// shift octaves left
-                for(int j = 0; j < staff->groups.size(); j++)
-                {
-                    Group *group = staff->groups.get(j);
-                    if(group->type == IS_OCTAVE &&
-                        group->time <= selection_start &&
-                        group->time + group->length >= selection_start)
-                    {
-                        group->length -= 1;
-                        if(group->length <= 0)
-                        {
-                            staff->groups.remove_object_number(j);
-                            j--;
-                        }
-                    }
-                }
-
-// shift times left
-                for(int j = start; j < staff->groups.size(); j++)
-                {
-                    Group *group = staff->groups.get(j);
-                    group->time -= 1;
-                }
+// delete the bar in all the staves
+                if(group->type == IS_BAR)
+                    delete_object(0, group->time, group->length);
+                else
+// delete the object in 1 staff
+                    delete_object(staff, group->time, group->length);
+                
+// update the current position
                 selection_start = selection_end = new_position;
             }
         }
@@ -552,6 +547,27 @@ int Score::find_delete_object(int cursor_x,
                     }
                     break;
                 }
+                case IS_BAR:
+// test bar for 1st staff only
+                if(*staff_n == 0)
+                {
+                    DrawObject *image = group->images.get(0);
+                    *image_n = 0;
+                    *x = image->abs_x - 1;
+                    *y = image->abs_y;
+                    *w = image->w;
+                    *h = image->h;
+//printf("Score::find_delete_object %d %d %d %d %d\n",
+//__LINE__, *x, *y, *w, *h);
+                    if(cursor_x >= *x &&
+                        cursor_y >= *y &&
+                        cursor_x < *x + *w &&
+                        cursor_y < *y + *h)
+                    {
+                        return 1;
+                    }
+                    break;
+                }
                 case IS_CHORD:
                     for(*image_n = 0; *image_n < group->images.size(); (*image_n)++)
                     {
@@ -580,6 +596,176 @@ int Score::find_delete_object(int cursor_x,
     return 0;
 }
 
+// delete an object & shift all objects after the deletion
+// doesn't delete 8vas
+// shift all of the later groups except bars left
+// shrink the 8vas
+// if staff is 0, delete the object & shift in all the staves
+void Score::delete_object(Staff *staff, double time, double length)
+{
+// delete the object
+    for(int i = 0; i < staves.size(); i++)
+    {
+        Staff *staff2 = staves.get(i);
+        if(staff == 0 || staff == staff2)
+        {
+            for(int j = 0; j < staff2->groups.size(); j++)
+            {
+                Group *group2 = staff2->groups.get(j);
+
+                if(group2->time == time &&
+                    group2->type != IS_OCTAVE)
+                {
+                    staff2->groups.remove_object_number(j);
+                    j--;
+                }
+
+// shift all objects left
+                if(group2->time > time)
+                    group2->time -= length;
+
+// shrink 8va
+                if(group2->type == IS_OCTAVE &&
+                    group2->time <= time &&
+                    group2->time + group2->length > time)
+                {
+                    group2->length -= length;
+                }
+            }
+        }
+    }
+
+// shift bars in lower staves to follow deletions in the top staff
+    if(staff == staves.get(0))
+    {
+        for(int i = 1; i < staves.size(); i++)
+        {
+            Staff *staff2 = staves.get(i);
+            for(int j = 1; j < staff2->groups.size(); j++)
+            {
+                Group *group2 = staff2->groups.get(j);
+                if(group2->time > time && group2->type == IS_BAR)
+                {
+                    Group *prev = staff2->groups.get(j - 1);
+                    double prev_time = prev->time;
+                    double next_time = group2->time;
+                    staff2->groups.set(j - 1, group2);
+                    staff2->groups.set(j, prev);
+                    prev->time = next_time;
+                    group2->time = prev_time;
+                }
+            }
+        }
+    }
+    else
+    if(staff != 0)
+// shift bars in a single lower staff right to ignore deletion
+    {
+        for(int j = staff->groups.size() - 1; j >= 0; j--)
+        {
+            Group *group2 = staff->groups.get(j);
+            if(group2->time > time && group2->type == IS_BAR)
+            {
+// last object is a bar
+                if(j == staff->groups.size() - 1)
+                    group2->time += 1;
+                else
+                {
+                    Group *next = staff->groups.get(j + 1);
+                    double prev_time = group2->time;
+                    double next_time = next->time;
+                    staff->groups.set(j + 1, group2);
+                    staff->groups.set(j, next);
+                    group2->time = next_time;
+                    next->time = prev_time;
+                }
+            }
+        }
+    }
+}
+
+// shift objects before an insertion
+// if staff is 0, shift in all the staves
+// if object is nonzero, object is inserted in the staff after an adjustment
+// to its time to reflect an insert on top of a bar
+void Score::insert_object(Staff *staff, Group *object, double time, double length)
+{
+    for(int i = 0; i < staves.size(); i++)
+    {
+        Staff *staff2 = staves.get(i);
+        if(staff == 0 || staff == staff2)
+        {
+            for(int j = 0; j < staff2->groups.size(); j++)
+            {
+                Group *group2 = staff2->groups.get(j);
+// shift all objects right
+                if(group2->time >= time)
+                    group2->time += length;
+// extend 8va
+                if(group2->type == IS_OCTAVE &&
+                    group2->time <= time &&
+                    group2->time + group2->length > time)
+                {
+                    group2->length += length;
+                }
+            }
+        }
+    }
+
+// insert single group after the shift
+    if(object != 0 && staff != 0)
+    {
+        staff->insert_before(time, object);
+    }
+
+// shift bars in lower staves right to follow insertions in the top staff
+    if(staff == staves.get(0))
+    {
+        for(int i = 1; i < staves.size(); i++)
+        {
+            Staff *staff2 = staves.get(i);
+            for(int j = staff2->groups.size() - 1; j >= 0; j--)
+            {
+                Group *group2 = staff2->groups.get(j);
+                if(group2->time >= time && group2->type == IS_BAR)
+                {
+// last object is a bar
+                    if(j == staff2->groups.size() - 1)
+                        group2->time += 1;
+                    else
+                    {
+                        Group *next = staff2->groups.get(j + 1);
+                        double prev_time = group2->time;
+                        double next_time = next->time;
+                        staff2->groups.set(j + 1, group2);
+                        staff2->groups.set(j, next);
+                        group2->time = next_time;
+                        next->time = prev_time;
+                    }
+                }
+            }
+        }
+    }
+    else
+    if(staff != 0)
+// shift bars in a single lower staff left to ignore insertion
+    {
+        for(int j = 1; j < staff->groups.size(); j++)
+        {
+            Group *group2 = staff->groups.get(j);
+            if(group2->time >= time && group2->type == IS_BAR)
+            {
+                Group *prev = staff->groups.get(j - 1);
+                double prev_time = prev->time;
+                double next_time = group2->time;
+                staff->groups.set(j - 1, group2);
+                staff->groups.set(j, prev);
+                prev->time = next_time;
+                group2->time = prev_time;
+            }
+        }
+    }
+}
 
 
 
@@ -668,6 +854,17 @@ Group* Staff::insert_before(double time, Group *new_group)
 // append it instead
     groups.append(new_group);
     return new_group;
+}
+
+int Staff::get_by_time(double time)
+{
+    for(int i = 0; i < groups.size(); i++)
+    {
+        Group *group = groups.get(i);
+        if(group->time == time)
+            return i;
+    }
+    return -1;
 }
 
 void Staff::dump()

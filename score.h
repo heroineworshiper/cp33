@@ -103,9 +103,12 @@ public:
 // absolute x & y from the line wrapping & staff calculations
     int abs_x;
     int abs_y;
+// dimensions if no pixmap
+    int w;
+    int h;
 // parent note for deletion operations
     Note *note;
-// pointer to the mwindow object
+// pointer to the mwindow object.  0 if no pixmap
     BC_Pixmap *pixmap;
 };
 
@@ -196,6 +199,8 @@ public:
     double max_beat();
     void copy_from(Staff *src);
     Group* insert_before(double time, Group *new_group);
+// number of 1st group at time
+    int get_by_time(double time);
     void dump();
 // reset temporaries for drawing
     void reset(int all);
@@ -270,6 +275,8 @@ public:
         int *y,
         int *w,
         int *h);
+    void delete_object(Staff *staff, double time, double length);
+    void insert_object(Staff *staff, Group *object, double time, double length);
 // fill gaps with rests.  Sort groups by time.
     void clean();
 
@@ -279,7 +286,8 @@ public:
 // the mane score
     static Score *instance;
     ArrayList<Staff*> staves;
-// objects computed for drawing
+
+// temporary objects computed for drawing
     ArrayList<Beat*> beats;
     ArrayList<Line*> lines;
 };

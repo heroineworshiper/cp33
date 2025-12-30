@@ -227,20 +227,7 @@ void CaptureMIDI::run()
                                                 {
 // insert before the beat & shift all right
                                                     group = new Group(selection_start, IS_CHORD);
-                                                    staff->groups.insert(group, i);
-                                                    for(int j = 0; j < staff->groups.size(); j++)
-                                                    {
-                                                        Group *group2 = staff->groups.get(j);
-                                                        if(j >= i + 1)
-                                                            group2->time += 1;
-// extend 8va
-                                                        if(group2->type == IS_OCTAVE &&
-                                                            group2->time <= selection_start &&
-                                                            group2->time + group2->length > selection_start)
-                                                        {
-                                                            group2->time += 1;
-                                                        }
-                                                    }
+                                                    score->insert_object(staff, group, group->time, group->length);
                                                 }
                                                 break;
                                             }
@@ -248,6 +235,7 @@ void CaptureMIDI::run()
                                             if(group->time > selection_start)
                                             {
 // insert before the beat & don't shift right
+// shouldn't get here, as the score is padded with rests
                                                 got_it = 1;
                                                 group = new Group(selection_start, IS_CHORD);
                                                 staff->groups.insert(group, i);
@@ -270,8 +258,8 @@ void CaptureMIDI::run()
                                             CaptureMenu::instance->update_save();
                                             Capture::instance->draw_score(1, 1);
                                         }
-                                        
-                                        Capture::instance->push_undo_after();
+
+                                        Capture::instance->push_undo_after(1);
                                     }
                                 }
                                 break;

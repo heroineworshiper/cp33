@@ -86,6 +86,7 @@
 #define DRAW_8VA_END 11
 #define CAPTURE_REST 12
 #define CAPTURE_KEY 13
+#define CAPTURE_BAR 14
 
 
 

@@ -14,6 +14,7 @@ endif
 PNGS := \
     images/8va.png \
     images/8va_button.png \
+    images/bar.png \
     images/bass.png \
     images/bottom_layer.png \
 	images/box.png \

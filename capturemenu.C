@@ -25,6 +25,7 @@
 #include "cursors.h"
 #include "reader.h"
 #include "mwindow.h"
+#include "reader.h"
 #include "readermenu.h"
 #include "readertheme.h"
 #include "score.h"
@@ -142,7 +143,6 @@ int CaptureErase::handle_event()
     {
         MWindow::instance->current_operation = ERASE_NOTES;
         CaptureMenu::instance->update_buttons();
-        CaptureMIDI::instance->stop_recording();
     }
     else
     {
@@ -171,7 +171,6 @@ int Capture8va::handle_event()
     {
         MWindow::instance->current_operation = DRAW_8VA_START;
         CaptureMenu::instance->update_buttons();
-        CaptureMIDI::instance->stop_recording();
     }
     else
     {
@@ -198,7 +197,32 @@ int CaptureRest::handle_event()
     {
         MWindow::instance->current_operation = CAPTURE_REST;
         CaptureMenu::instance->update_buttons();
-        CaptureMIDI::instance->stop_recording();
+    }
+    else
+    {
+        MWindow::instance->set_cursor(ARROW_CURSOR, 0, 0);
+        MWindow::instance->current_operation = IDLE;
+    }
+    return 1;
+}
+
+
+CaptureBar::CaptureBar(int x, int y)
+ : BC_Toggle(x, 
+    y, 
+    MWindow::instance->theme->get_image_set("bar"), 
+    MWindow::instance->current_operation == CAPTURE_BAR)
+{
+    set_tooltip("Draw bar");
+}
+
+
+int CaptureBar::handle_event()
+{
+    if(MWindow::instance->current_operation != CAPTURE_BAR)
+    {
+        MWindow::instance->current_operation = CAPTURE_BAR;
+        CaptureMenu::instance->update_buttons();
     }
     else
     {
@@ -224,7 +248,6 @@ int Start8va::handle_event()
     {
         MWindow::instance->current_operation = DRAW_8VA_START;
         CaptureMenu::instance->update_buttons();
-        CaptureMIDI::instance->stop_recording();
     }
     else
     {
@@ -250,7 +273,6 @@ int End8va::handle_event()
     {
         MWindow::instance->current_operation = DRAW_8VA_END;
         CaptureMenu::instance->update_buttons();
-        CaptureMIDI::instance->stop_recording();
     }
     else
     {
@@ -281,9 +303,7 @@ int CaptureErase1::handle_event()
 //        selection_end = selection_start;
 // printf("CaptureErase1::handle_event %d selection_start=%f\n",
 // __LINE__, selection_start);
-        score_changed = 1;
-        CaptureMenu::instance->update_save();
-        Capture::instance->push_undo_after();
+        Capture::instance->push_undo_after(1);
         Capture::instance->draw_score();
     }
     return 1;
@@ -303,7 +323,6 @@ int KeyButton::handle_event()
     {
         MWindow::instance->current_operation = CAPTURE_KEY;
         CaptureMenu::instance->update_buttons();
-        CaptureMIDI::instance->stop_recording();
     }
     else
     {
@@ -427,6 +446,8 @@ void CaptureMenu::create_objects()
     add_tool(end_8va = new End8va(x, y));
     x += end_8va->get_w();
     add_tool(rest = new CaptureRest(x, y));
+    x += rest->get_w();
+    add_tool(bar = new CaptureBar(x, y));
 
     x = x1;
     y += erase1->get_h();
@@ -480,6 +501,8 @@ void CaptureMenu::show()
 
 void CaptureMenu::update_buttons()
 {
+    if(MWindow::instance->current_operation != RECORD_MIDI)
+        CaptureMIDI::instance->stop_recording();
 // hide the cursor for these modes
     if(MWindow::instance->current_operation == ERASE_NOTES)
         MWindow::instance->set_cursor(TRANSPARENT_CURSOR, 0, 0);
@@ -491,6 +514,7 @@ void CaptureMenu::update_buttons()
     end_8va->set_value(MWindow::instance->current_operation == DRAW_8VA_END);
     rest->set_value(MWindow::instance->current_operation == CAPTURE_REST);
     key->set_value(MWindow::instance->current_operation == CAPTURE_KEY);
+    bar->set_value(MWindow::instance->current_operation == CAPTURE_BAR);
 }
 
 void CaptureMenu::update_save()

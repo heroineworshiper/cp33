@@ -73,7 +73,7 @@ public:
     void do_capture();
     void reset_undo();
     void push_undo_before();
-    void push_undo_after();
+    void push_undo_after(int changed = 1);
     void pop_undo();
     void pop_redo();
     void load_undo(CaptureUndo *undo);
@@ -106,6 +106,8 @@ public:
 
 // selection for key tool
     int current_key;
+// bars follow every edit in every staff
+    int bars_follow_edits;
 
     MWindow *mwindow;
     ReaderTheme *theme;

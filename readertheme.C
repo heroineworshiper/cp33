@@ -118,6 +118,7 @@ void ReaderTheme::initialize()
 		"button_hi.png",
 		"button_dn.png",
         "erase1");
+    new_toggle("bar.png", "bar");
     new_toggle("erase.png", "erase");
     new_toggle("draw.png", "draw");
     new_toggle("start_8va_button.png", "start_8va");
