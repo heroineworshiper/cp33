@@ -199,8 +199,9 @@ void MWindow::load_defaults()
     CLAMP(erase_size, 1, MAX_BRUSH);
 
     Capture::instance->current_key = defaults->get("CURRENT_KEY", KEY_DF);
+    Capture::instance->bars_follow_edits = defaults->get("BARS_FOLLOW_EDITS", 0);
     CLAMP(Capture::instance->current_key, 0, KEY_B);
-    
+
     if(get_resources()->filebox_w > ROOT_W)
     {
         get_resources()->filebox_w = ROOT_W;
@@ -231,6 +232,7 @@ void MWindow::save_defaults()
     defaults->update("ERASE_SIZE", (int32_t)erase_size);
 
     defaults->update("CURRENT_KEY", Capture::instance->current_key);
+    defaults->update("BARS_FOLLOW_EDITS", Capture::instance->bars_follow_edits);
     defaults->save();
 }
 

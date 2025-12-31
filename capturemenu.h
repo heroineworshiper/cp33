@@ -123,7 +123,7 @@ public:
     int handle_event();
 };
 
-class BarsFollowEdits : public BC_Toggle
+class BarsFollowEdits : public BC_CheckBox
 {
 public:
     BarsFollowEdits(int x, int y);

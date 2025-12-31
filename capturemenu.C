@@ -353,6 +353,23 @@ int KeySelector::handle_event()
 
 
 
+BarsFollowEdits::BarsFollowEdits(int x, int y)
+ : BC_CheckBox(x, 
+    y,
+    Capture::instance->bars_follow_edits,
+    "Shift bars")
+{
+}
+
+int BarsFollowEdits::handle_event()
+{
+    Capture::instance->bars_follow_edits = get_value();
+    return 1;
+}
+
+
+
+
 
 CaptureMenu::CaptureMenu()
  : BC_Window("Capture Menu", 
@@ -360,7 +377,7 @@ CaptureMenu::CaptureMenu()
     0,
 	MWindow::instance->theme->get_image_set("reader")[0]->get_w() * 4 + 
         MWindow::instance->theme->margin * 2, 
-	MWindow::instance->theme->get_image_set("reader")[0]->get_h() * 6 + 
+	MWindow::instance->theme->get_image_set("reader")[0]->get_h() * 7 + 
         MWindow::instance->theme->margin * 2,
     -1,
     -1,
@@ -451,6 +468,11 @@ void CaptureMenu::create_objects()
 
     x = x1;
     y += erase1->get_h();
+    add_tool(window = new BarsFollowEdits(x, y));
+
+    x = x1;
+    y += window->get_h();
+
 
 
     add_tool(window = new ReaderButton(x, y));

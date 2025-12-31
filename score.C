@@ -635,31 +635,34 @@ void Score::delete_object(Staff *staff, double time, double length)
         }
     }
 
-// shift bars in lower staves to follow deletions in the top staff
-    if(staff == staves.get(0))
+// shift bars in all staves to follow deletions in selected staff
+    if(staff != 0 && Capture::instance->bars_follow_edits)
     {
-        for(int i = 1; i < staves.size(); i++)
+        for(int i = 0; i < staves.size(); i++)
         {
             Staff *staff2 = staves.get(i);
-            for(int j = 1; j < staff2->groups.size(); j++)
+            if(staff2 != staff)
             {
-                Group *group2 = staff2->groups.get(j);
-                if(group2->time > time && group2->type == IS_BAR)
+                for(int j = 1; j < staff2->groups.size(); j++)
                 {
-                    Group *prev = staff2->groups.get(j - 1);
-                    double prev_time = prev->time;
-                    double next_time = group2->time;
-                    staff2->groups.set(j - 1, group2);
-                    staff2->groups.set(j, prev);
-                    prev->time = next_time;
-                    group2->time = prev_time;
+                    Group *group2 = staff2->groups.get(j);
+                    if(group2->time > time && group2->type == IS_BAR)
+                    {
+                        Group *prev = staff2->groups.get(j - 1);
+                        double prev_time = prev->time;
+                        double next_time = group2->time;
+                        staff2->groups.set(j - 1, group2);
+                        staff2->groups.set(j, prev);
+                        prev->time = next_time;
+                        group2->time = prev_time;
+                    }
                 }
             }
         }
     }
     else
+// shift bars in selected staff right to ignore deletion
     if(staff != 0)
-// shift bars in a single lower staff right to ignore deletion
     {
         for(int j = staff->groups.size() - 1; j >= 0; j--)
         {
@@ -718,29 +721,32 @@ void Score::insert_object(Staff *staff, Group *object, double time, double lengt
         staff->insert_before(time, object);
     }
 
-// shift bars in lower staves right to follow insertions in the top staff
-    if(staff == staves.get(0))
+// shift bars in all staves to follow insertions in selected staff
+    if(staff != 0 && Capture::instance->bars_follow_edits)
     {
-        for(int i = 1; i < staves.size(); i++)
+        for(int i = 0; i < staves.size(); i++)
         {
             Staff *staff2 = staves.get(i);
-            for(int j = staff2->groups.size() - 1; j >= 0; j--)
+            if(staff2 != staff)
             {
-                Group *group2 = staff2->groups.get(j);
-                if(group2->time >= time && group2->type == IS_BAR)
+                for(int j = staff2->groups.size() - 1; j >= 0; j--)
                 {
-// last object is a bar
-                    if(j == staff2->groups.size() - 1)
-                        group2->time += 1;
-                    else
+                    Group *group2 = staff2->groups.get(j);
+                    if(group2->time >= time && group2->type == IS_BAR)
                     {
-                        Group *next = staff2->groups.get(j + 1);
-                        double prev_time = group2->time;
-                        double next_time = next->time;
-                        staff2->groups.set(j + 1, group2);
-                        staff2->groups.set(j, next);
-                        group2->time = next_time;
-                        next->time = prev_time;
+    // last object is a bar
+                        if(j == staff2->groups.size() - 1)
+                            group2->time += 1;
+                        else
+                        {
+                            Group *next = staff2->groups.get(j + 1);
+                            double prev_time = group2->time;
+                            double next_time = next->time;
+                            staff2->groups.set(j + 1, group2);
+                            staff2->groups.set(j, next);
+                            group2->time = next_time;
+                            next->time = prev_time;
+                        }
                     }
                 }
             }
@@ -748,7 +754,7 @@ void Score::insert_object(Staff *staff, Group *object, double time, double lengt
     }
     else
     if(staff != 0)
-// shift bars in a single lower staff left to ignore insertion
+// shift bars in selected staff left to ignore insertion
     {
         for(int j = 1; j < staff->groups.size(); j++)
         {
