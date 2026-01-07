@@ -173,6 +173,7 @@ void MWindow::create_objects()
     capture_menu->start();
 
     load = new LoadFileThread;
+    export_file = new ExportThread;
 //    printf("MWindow::create_objects %d color_model=%d\n", __LINE__, get_color_model());
 }
 
@@ -187,6 +188,10 @@ void MWindow::load_defaults()
 	defaults->load();
     BC_WindowBase::load_defaults(defaults);
     
+    defaults->get("EXPORT_PATH", &Reader::instance->export_path);
+    Reader::instance->export1 = defaults->get("EXPORT1", Reader::instance->export1);
+    Reader::instance->export2 = defaults->get("EXPORT2", Reader::instance->export2);
+
     is_top = defaults->get("IS_TOP", 0);
     is_hollow = defaults->get("IS_HOLLOW", 0);
     top_color = defaults->get("TOP_COLOR", 0);
@@ -197,6 +202,7 @@ void MWindow::load_defaults()
     CLAMP(bottom_color, 0, TOTAL_COLORS - 1);
     CLAMP(draw_size, 1, MAX_BRUSH);
     CLAMP(erase_size, 1, MAX_BRUSH);
+    
 
     Capture::instance->current_key = defaults->get("CURRENT_KEY", KEY_DF);
     Capture::instance->bars_follow_edits = defaults->get("BARS_FOLLOW_EDITS", 0);
@@ -224,6 +230,11 @@ void MWindow::load_defaults()
 void MWindow::save_defaults()
 {
     BC_WindowBase::save_defaults(defaults);
+
+    defaults->update("EXPORT_PATH", &Reader::instance->export_path);
+    defaults->update("EXPORT1", Reader::instance->export1);
+    defaults->update("EXPORT2", Reader::instance->export2);
+
     defaults->update("IS_TOP", is_top);
     defaults->update("IS_HOLLOW", is_hollow);
     defaults->update("TOP_COLOR", (int32_t)top_color);
@@ -379,6 +390,11 @@ const uint8_t rgb8_table[] =
 // draw full page
 void MWindow::show_page(int number, int lock_it)
 {
+//    printf("MWindow::show_page %d number=%d\n", __LINE__, number);
+
+    MenuWindow::instance->put_event([](void *ptr)
+    { MenuWindow::instance->update_page(); }, 0);
+
     show_page_fragment(number,
         0,
         0,
@@ -611,6 +627,11 @@ void MWindow::show_page_fragment(int number,
 
 int MWindow::export_page(const char *export_path, int number)
 {
+    if(number < 0 || number >= pages.size())
+    {
+        return 1;
+    }
+
     Page *page = pages.get(number);
 // scale it to draw RGB oversampling
     int dst_w = root_w * 3;
@@ -985,8 +1006,15 @@ printf("MWindow::button_press_event %d\n", __LINE__);
     if(load->is_running())
     {
         load->lock_gui("MWindow::button_release_event");
-        load->gui->raise_window(1);
+        load->get_gui()->raise_window(1);
         load->unlock_gui();
+    }
+    else
+    if(export_file->is_running())
+    {
+        export_file->lock_gui("MWindow::button_release_event");
+        export_file->get_gui()->raise_window(1);
+        export_file->unlock_gui();
     }
     else
     if(MenuWindow::instance->get_hidden())

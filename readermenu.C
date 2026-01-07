@@ -19,6 +19,7 @@
  */
 
 
+#include "bcprogressbox.h"
 #include "reader.h"
 #include "readermenu.h"
 #include "readertheme.h"
@@ -30,18 +31,6 @@
 
 MenuWindow* MenuWindow::instance = 0;
 PaletteWindow* PaletteWindow::palette_window = 0;
-
-LoadFileWindow::LoadFileWindow(int x, int y, char *path)
- : BC_FileBox(x, //x
-    y, // y
-    path, // init_path
-    "Load file", // title
-    "Select a file to load") // caption
-{
-}
-
-
-
 
 
 
@@ -91,8 +80,11 @@ BC_Window* LoadFileThread::new_gui()
         y = 0;
     }
 
-
-	gui = new LoadFileWindow(x, y, default_path);
+    BC_FileBox *gui = new BC_FileBox(x, 
+        y, 
+        default_path, // init_path
+        "Load file", // title
+        "Select a file to load"); // caption
     gui->get_filters()->remove_all_objects();
 
 
@@ -116,6 +108,7 @@ void LoadFileThread::handle_done_event(int result)
 // __LINE__, 
 // result,
 // gui->get_submitted_path());
+    BC_FileBox *gui = (BC_FileBox*)get_gui();
     gui->lock_window();
     gui->hide_window();
     gui->unlock_window();
@@ -140,6 +133,105 @@ void LoadFileThread::handle_done_event(int result)
 }
 
 
+
+
+
+
+
+
+
+ExportThread::ExportThread()
+ : BC_DialogThread()
+{
+}
+
+BC_Window* ExportThread::new_gui()
+{
+// clamp the window size
+    if(MWindow::instance->get_resources()->filebox_w > MWindow::instance->root_w)
+    {
+        MWindow::instance->get_resources()->filebox_w = MWindow::instance->root_w;
+    }
+    if(MWindow::instance->get_resources()->filebox_h > MWindow::instance->root_h)
+    {
+        MWindow::instance->get_resources()->filebox_h = MWindow::instance->root_h;
+    }
+
+    int x = MWindow::instance->get_abs_cursor_x(1) - 
+        MWindow::instance->get_resources()->filebox_w / 2;
+    int y = MWindow::instance->get_abs_cursor_y(1) - 
+        MWindow::instance->get_resources()->filebox_h / 2;
+
+    if(x + MWindow::instance->get_resources()->filebox_w > MWindow::instance->root_w)
+    {
+        x = MWindow::instance->root_w - MWindow::instance->get_resources()->filebox_w;
+    }
+    if(y + MWindow::instance->get_resources()->filebox_h > MWindow::instance->root_h)
+    {
+        y = MWindow::instance->root_h - MWindow::instance->get_resources()->filebox_h;
+    }
+    if(x < 0)
+    {
+        x = 0;
+    }
+    if(y < 0)
+    {
+        y = 0;
+    }
+
+    BC_FileBox *gui = new BC_FileBox(x, 
+        y, 
+        Reader::instance->export_path.c_str(), // init_path
+        "Export images", // title
+        "Select a prefix for the output files"); // caption
+    gui->get_filters()->remove_all_objects();
+
+    sprintf(BC_WindowBase::get_resources()->filebox_filter, "*");
+
+	gui->create_objects();
+	return gui;
+}
+
+void ExportThread::handle_done_event(int result)
+{
+// printf("ExportThread::handle_done_event %d result=%d path=%s\n", 
+// __LINE__, 
+// result,
+// gui->get_submitted_path());
+    BC_FileBox *gui = (BC_FileBox*)get_gui();
+    gui->lock_window();
+    gui->hide_window();
+    gui->unlock_window();
+
+
+
+    
+    if(result == 0)
+    {
+        Reader::instance->export_path.assign(gui->get_submitted_path());
+        MWindow::instance->save_defaults();
+
+        int error = 0;
+	    BC_ProgressBox *progress = new BC_ProgressBox(0, 
+		    0, 
+		    "Export pages", 
+		    Reader::instance->export2 - Reader::instance->export1 + 1);
+	    progress->start_progress();
+        for(int i = Reader::instance->export1; i <= Reader::instance->export2; i++)
+        {
+            if(MWindow::instance->export_page(Reader::instance->export_path.c_str(), i))
+            {
+    // TODO: show errors someday
+                error = 1;
+                break;
+            }
+            if(progress->is_cancelled()) break;
+            progress->update(i - Reader::instance->export1 + 1, 1);
+        }
+	    progress->stop_progress();
+	    delete progress;
+    }
+}
 
 
 
@@ -284,6 +376,46 @@ int LoadFile::handle_event()
     MWindow::instance->load->start();
     
     lock_window();
+    return 1;
+}
+
+
+ExportFile::ExportFile(int x, int y)
+ : BC_Button(x, y, MWindow::instance->theme->get_image_set("printer"))
+{
+    set_tooltip("Export pages...");
+}
+
+int ExportFile::handle_event()
+{
+    unlock_window();
+    MWindow::instance->exit_drawing();
+    MenuWindow::instance->hide_windows(1);
+    MWindow::instance->export_file->start();
+    
+    lock_window();
+    return 1;
+}
+
+
+
+ExportNum::ExportNum(int x, int y, int w, int *output, const char *text)
+ : BC_TumbleTextBox(MenuWindow::instance, 
+	*output,
+	0,
+	999,
+	x, 
+	y, 
+	w)
+{
+    set_tooltip(text);
+    this->output = output;
+}
+
+int ExportNum::handle_event()
+{
+    *output = atoi(get_text());
+    MWindow::instance->save_defaults();
     return 1;
 }
 
@@ -678,7 +810,7 @@ MenuWindow::MenuWindow()
     0,
 	MWindow::instance->theme->get_image_set("load")[0]->get_w() * 4 + 
         MWindow::instance->theme->margin * 2, 
-	MWindow::instance->theme->get_image_set("load")[0]->get_h() * 6 + 
+	MWindow::instance->theme->get_image_set("load")[0]->get_h() * 8 + 
         MWindow::instance->theme->margin * 2,
     -1,
     -1,
@@ -756,7 +888,38 @@ void MenuWindow::create_objects()
     y += window->get_h();
     x = x1;
 
+    ExportFile *export_button;
+    add_tool(export_button = new ExportFile(x, y));
+    x += export_button->get_w();
+    char string[BCTEXTLEN];
+    sprintf(string, "Page %d", current_page);
+    add_tool(page_text = new BC_Title(x, y, string));
+
+    y += export_button->get_h();
+    x = x1;
+
+    export_start = new ExportNum(x, 
+        y, 
+        get_w() / 2 - x - margin - BC_Tumbler::calculate_w(),
+        &Reader::instance->export1,
+        "First page to export");
+    export_start->create_objects();
+    x += export_start->get_w() + margin;
+
+    export_end = new ExportNum(x, 
+        y, 
+        get_w() - x - margin - BC_Tumbler::calculate_w(),
+        &Reader::instance->export2,
+        "Last page to export");
+    export_end->create_objects();
+
+    y += export_start->get_h();
+    x = x1;
+
     add_tool(window = new CaptureButton(x, y));
+    x += window->get_w();
+
+
 
 
 //    unlock_window();
@@ -773,6 +936,14 @@ int MenuWindow::close_event()
 #endif
     return 1;
 }
+
+void MenuWindow::update_page()
+{
+    char string[BCTEXTLEN];
+    sprintf(string, "Page %d", current_page);
+    page_text->update(string);
+}
+
 
 void MenuWindow::update_buttons()
 {

@@ -80,6 +80,11 @@ void ReaderTheme::initialize()
 		"button_hi.png",
 		"button_dn.png",
         "save2");
+    new_button("printer.png",
+		"button_up.png",
+		"button_hi.png",
+		"button_dn.png",
+        "printer");
     new_button("undo.png",
 		"button_up.png",
 		"button_hi.png",

@@ -1,6 +1,6 @@
 /*
  * MUSIC READER
- * Copyright (C) 2021 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2021-2026 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,11 +29,6 @@
 class PaletteWindow;
 class MenuWindow;
 
-class LoadFileWindow : public BC_FileBox
-{
-public:
-	LoadFileWindow(int x, int y, char *path);
-};
 
 
 class LoadFileThread : public BC_DialogThread
@@ -42,7 +37,16 @@ public:
 	LoadFileThread();
     BC_Window* new_gui();
     void handle_done_event(int result);
-    LoadFileWindow *gui;
+};
+
+
+
+class ExportThread : public BC_DialogThread
+{
+public:
+	ExportThread();
+    BC_Window* new_gui();
+    void handle_done_event(int result);
 };
 
 
@@ -94,6 +98,13 @@ class LoadFile : public BC_Button
 {
 public:
     LoadFile(int x, int y);
+    int handle_event();
+};
+
+class ExportFile : public BC_Button
+{
+public:
+    ExportFile(int x, int y);
     int handle_event();
 };
 
@@ -230,6 +241,14 @@ public:
     int handle_event();
 };
 
+class ExportNum : public BC_TumbleTextBox
+{
+public:
+    ExportNum(int x, int y, int w, int *output, const char *text);
+    int handle_event();
+    int *output;
+};
+
 
 
 class MenuWindow : public BC_Window
@@ -247,6 +266,7 @@ public:
     void update_color();
     void update_colors();
     void update_buttons();
+    void update_page();
     void show();
 
     Save *save;
@@ -260,6 +280,9 @@ public:
     Bottom *bottom;
     DrawSize *draw_size;
     EraseSize *erase_size;
+    ExportNum *export_start;
+    ExportNum *export_end;
+    BC_Title *page_text;
     TopColor *top_color;
     BottomColor *bottom_color;
 // background for palette

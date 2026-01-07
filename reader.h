@@ -26,7 +26,7 @@
 #include "capture.inc"
 #include "guicast.h"
 #include "reader.inc"
-
+#include <string>
 
 
 
@@ -115,6 +115,12 @@ public:
     void do_reader();
     
     static Reader *instance;
+
+// export parameters
+    std::string export_path;
+    int export1;
+    int export2;
+
 // editing mode
     static int mode;
 #define READER_MODE 0

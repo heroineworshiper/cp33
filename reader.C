@@ -111,7 +111,6 @@ int command_result;
 Sema command_ready;
 Sema command_done;
 int client_mode = 0;
-const char *export_path = 0;
 
 
 // framebuffer I/O
@@ -165,6 +164,8 @@ int Reader::display_mode = ONE_PAGE;
 
 Reader::Reader()
 {
+    export1 = 0;
+    export2 = -1;
 }
 
 
@@ -776,15 +777,15 @@ int Reader::load_file(const char *path)
     load_annotations();
 
 // export all the pages
-    if(export_path)
-    {
-        for(i = 0; i < page_count; i++)
-        {
-            if(MWindow::instance->export_page(export_path, i)) break;
-        }
-        exit(0);
-    }
-    else
+//     if(export_path)
+//     {
+//         for(i = export1; i < export2; i++)
+//         {
+//             if(MWindow::instance->export_page(export_path, i)) break;
+//         }
+//         exit(0);
+//     }
+//     else
 // show page 1
     {
         MWindow::instance->show_page(current_page, 1);
@@ -842,7 +843,7 @@ int main(int argc, char *argv[])
 	pthread_attr_t  attr;
 	pthread_attr_init(&attr);
 
-//    const char *path = 0;
+    const char *path = 0;
     client_address[0] = 0;
     client_port = -1;
 
@@ -891,20 +892,23 @@ int main(int argc, char *argv[])
 //             if(!strcmp(argv[i], "-e"))
 //             {
 //                 i++;
-//                 if(i >= argc)
+//                 if(i + 2 >= argc)
 //                 {
-//                     printf("-e needs a filename\n");
+//                     printf("-e needs <filename> <start page> <end page + 1>\n");
 //                     exit(1);
 //                 }
 //                 else
 //                 {
 //                     export_path = argv[i];
+//                     export1 = atoi(argv[i + 1]);
+//                     export2 = atoi(argv[i + 2]);
+//                     i += 2;
 //                 }
 //             }
 //             else
 //             {
-//                 path = argv[i];
-//             }
+                path = argv[i];
+//            }
         }
     }
 
@@ -938,10 +942,10 @@ int main(int argc, char *argv[])
         printf("Starting network server\n");
         pthread_create(&tid, &attr, server_thread, 0);
 
-//         if(path)
-//         {
-//             load_file_entry(path);
-//         }
+        if(path)
+        {
+            Reader::instance->load_file_entry(path);
+        }
 
 // enable the GPIOs
 #ifdef RASPIAN

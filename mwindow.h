@@ -136,6 +136,7 @@ public:
     VFrame *undo_after[UNDO_LEVELS];
 
     LoadFileThread *load;
+    ExportThread *export_file;
     ReaderTheme *theme;
     BC_Hash *defaults;
     static MWindow *instance;

@@ -45,6 +45,7 @@ PNGS := \
     images/ok.png \
     images/palette_bg.png \
     images/prev_page.png \
+    images/printer.png \
     images/quarter.png \
     images/qrest.png \
     images/qrest2.png \

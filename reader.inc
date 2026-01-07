@@ -6,6 +6,7 @@ class ManeWindow;
 class MenuThread;
 class CaptureThread;
 class ReaderTheme;
+class ExportThread;
 
 #define TOTAL_COLORS 8
 #define MAX_BRUSH 64
