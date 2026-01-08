@@ -377,6 +377,7 @@ void Score::delete_beat()
 
     for(int i = 0; i < staves.size(); i++)
     {
+// selected staff or all staves selected
         if(current_staff == i || current_staff < 0)
         {
             Staff *staff = staves.get(i);
@@ -603,6 +604,7 @@ int Score::find_delete_object(int cursor_x,
 // if staff is 0, delete the object & shift in all the staves
 void Score::delete_object(Staff *staff, double time, double length)
 {
+//printf("Score::delete_object %d time=%f length=%f\n", __LINE__, time, length);
 // delete the object
     for(int i = 0; i < staves.size(); i++)
     {
@@ -667,13 +669,14 @@ void Score::delete_object(Staff *staff, double time, double length)
         for(int j = staff->groups.size() - 1; j >= 0; j--)
         {
             Group *group2 = staff->groups.get(j);
-            if(group2->time > time && group2->type == IS_BAR)
+            if(group2->time >= time && group2->type == IS_BAR)
             {
 // last object is a bar
                 if(j == staff->groups.size() - 1)
                     group2->time += 1;
                 else
                 {
+//printf("Score::delete_object %d time=%f\n", __LINE__, group2->time);
                     Group *next = staff->groups.get(j + 1);
                     double prev_time = group2->time;
                     double next_time = next->time;
