@@ -152,6 +152,7 @@ Page::~Page()
 }
 
 ArrayList<Page*> pages;
+int grey = 0;
 
 
 int Reader::mode = READER_MODE;
@@ -739,7 +740,23 @@ int Reader::load_file(const char *path)
     int src_w;
     int src_h;
     int page_count;
+
     int _ = fread(&src_w, 1, 4, src_fd);
+// greyscale
+//printf("main %d: src_w=%d\n", __LINE__, src_w);
+    if(src_w == -1)
+    {
+        uint8_t header[24];
+        _ = fread(header, 1, 20, src_fd);
+        _ = fread(&src_w, 1, 4, src_fd);
+//printf("main %d: src_w=%d\n", __LINE__, src_w);
+        grey = 1;
+    }
+    else
+    {
+        grey = 0;
+    }
+
     _ = fread(&src_h, 1, 4, src_fd);
     _ = fread(&page_count, 1, 4, src_fd);
     printf("Pages: %d w=%d h=%d\n", page_count, src_w, src_h);
@@ -765,11 +782,12 @@ int Reader::load_file(const char *path)
         pages.append(page);
         page->image = new VFrame(src_w, 
 		    src_h, 
-		    BC_A8);
+		    grey ? BC_RGB565 : BC_A8);
+        int size = (grey ? src_w * src_h * 2 : src_w * src_h);
         page->annotations = new VFrame(src_w, 
 		    src_h, 
 		    BC_A8);
-        int _ = fread(page->image->get_data(), 1, src_w * src_h, src_fd);
+        int _ = fread(page->image->get_data(), 1, size, src_fd);
     }
     fclose(src_fd);
 

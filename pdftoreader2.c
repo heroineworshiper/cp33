@@ -63,6 +63,7 @@ int crop_w2, crop_h2;
 int autocrop = 0;
 int dpi = DPI;
 int threshold = THRESHOLD;
+int grey = 0; // greyscale
 FILE *dest_fd;
 
 char* get_suffix(char *dst, char *path)
@@ -153,7 +154,9 @@ void process_frame(uint8_t *src, int src_w, int src_h)
 // an output height 3x higher than the number of rows
     int y_table[DISPLAY_H * 3 + 1];
     int x_table[DISPLAY_W + 1];
-    uint8_t dst_row[DISPLAY_W];
+// extra space for 16 bit
+    uint8_t dst_row[DISPLAY_W * 2];
+    uint16_t *dst_row16 = (uint16_t*)dst_row;
     int row;
     int subrow;
     int col;
@@ -270,7 +273,7 @@ printf("autocrop: x=%d y=%d w=%d h=%d\n", crop_x, crop_y, crop_w2, crop_h2);
 
     for(row = 0; row < DISPLAY_H; row++)
     {
-        bzero(dst_row, DISPLAY_W);
+        bzero(dst_row, DISPLAY_W * 2);
 // 3 source rows become each destination row
         for(subrow = 0; subrow < 3; subrow++)
         {
@@ -288,25 +291,49 @@ printf("autocrop: x=%d y=%d w=%d h=%d\n", crop_x, crop_y, crop_w2, crop_h2);
             {
                 int src_col0 = x_table[col];
                 int src_col1 = x_table[col + 1];
-                uint8_t value = 0xff;
+                uint32_t value;
+                if(grey) 
+                    value = 0;
+                else
+                    value = 0xff;
                 if(src_col1 == src_col0)
                 {
                     src_col1++;
                 }
                 
-// get darkest pixel in rectangle
+// get darkest pixel or average of rectangle
                 for(i = src_row0; i < src_row1; i++)
                 {
                     for(j = src_col0; j < src_col1; j++)
                     {
                         uint8_t new_value = *(src + src_w * i + j);
-                        if(new_value < value)
-                        {
-                            value = new_value;
-                        }
+                        if(grey) 
+                            value += new_value;
+                        else
+                            if(new_value < value)
+                            {
+                                value = new_value;
+                            }
                     }
                 }
 
+                if(grey)
+                {
+                    value /= (src_row1 - src_row0) * (src_col1 - src_col0);
+                    switch(subrow)
+                    {
+                        case 0:
+                            dst_row16[col] |= (((value * 0b1111100000000000) / 255) & 0b1111100000000000);
+                            break;
+                        case 1:
+                            dst_row16[col] |= (((value * 0b11111100000) / 255) & 0b11111100000);
+                            break;
+                        case 2:
+                            dst_row16[col] |= (((value * 0b11111) / 255) & 0b11111);
+                            break;
+                    }
+                }
+                else
                 if(value > threshold)
                 {
                     dst_row[col] |= component;
@@ -314,7 +341,10 @@ printf("autocrop: x=%d y=%d w=%d h=%d\n", crop_x, crop_y, crop_w2, crop_h2);
             }
         }
 
-        fwrite(dst_row, 1, DISPLAY_W, dest_fd);
+        if(grey)
+            fwrite(dst_row, 1, DISPLAY_W * 2, dest_fd);
+        else
+            fwrite(dst_row, 1, DISPLAY_W, dest_fd);
     }
 }
 
@@ -431,11 +461,14 @@ int main(int argc, char *argv[])
         printf("Usage: %s <config file>\n", progname);
         printf("The config file contains commands:\n");
         printf("# comment line\n");
+        printf("GREY enable greyscale mode\n");
         printf("SRC <source file> this appears multiple times if individual image files\n");
         printf("DST <dest file> this appears once.  If it ends in .gz, it's compressed\n");
         printf("DPI <source dpi if PDF> default %d\n", DPI);
         printf("CROP <x y w h> cropping dimensions.  W & H are truncated to the source.\n");
         printf("THRESHOLD <0-255> greyscale value for white.  default %d\n", THRESHOLD);
+        printf("    Only used for cropping in greyscale mode.\n");
+        printf("    Pixels are averaged in greyscale mode.\n");
         printf("PAGES <start & end page if PDF> starting page starts at 1.  Ending page is inclusive & truncated to the source pages.\n");
         printf("\nExample config file:\n");
         printf("SRC /home/archive/scherzo4.pdf\n");
@@ -480,6 +513,11 @@ int main(int argc, char *argv[])
         *ptr2 = 0;
         
 //        printf("command=%s args=%s\n", command, args);
+        if(!strcasecmp(command, "GREY"))
+        {
+            grey = 1;
+        }
+        else
         if(!strcasecmp(command, "SRC"))
         {
             sources = realloc(sources, (total_sources + 1) * sizeof(char*));
@@ -558,6 +596,16 @@ int main(int argc, char *argv[])
     int display_w = DISPLAY_W;
     int display_h = DISPLAY_H;
     int temp = 0;
+    if(grey)
+    {
+// some simple header
+        uint8_t header[] = { 
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
+            'R',  'E',  'A',  'D',  'E',  'R',  'G',  'R', 
+            'E',  'Y',  0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        };
+        fwrite(header, 1, sizeof(header), dest_fd);
+    }
     fwrite(&display_w, 1, 4, dest_fd);
     fwrite(&display_h, 1, 4, dest_fd);
 // placeholder for number of pages
@@ -896,8 +944,19 @@ int main(int argc, char *argv[])
                 }
             }
             else
+            if(cinfo.jpeg_color_space == JCS_YCbCr)
             {
-                printf("Unknown JPEG colorspace.\n");
+                frame_buffer = (uint8_t*)malloc(src_w * src_h * 3);
+                rows = malloc(src_h * sizeof(uint8_t*));
+                for(j = 0; j < src_h; j++)
+                {
+                    rows[j] = frame_buffer + src_w * j * 3;
+                }
+            }
+            else
+            {
+                printf("main %d: Unknown JPEG colorspace %d\n", 
+                    __LINE__, cinfo.jpeg_color_space);
                 exit(1);
             }
 
@@ -915,6 +974,33 @@ int main(int argc, char *argv[])
                 dst_ptr = frame_buffer;
                 for(j = 0; j < src_w * src_h; j++)
                 {
+// take red only
+                    *dst_ptr++ = *src_ptr;
+                    src_ptr += 3;
+                }
+            }
+            else
+            if(cinfo.jpeg_color_space == JCS_YCbCr)
+            {
+// packed YUV
+                src_ptr = frame_buffer;
+                dst_ptr = frame_buffer;
+
+// printf("main %d: %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+// __LINE__,
+// src_ptr[0],
+// src_ptr[1],
+// src_ptr[2],
+// src_ptr[3],
+// src_ptr[4],
+// src_ptr[5],
+// src_ptr[6],
+// src_ptr[7],
+// src_ptr[8]);
+
+                for(j = 0; j < src_w * src_h; j++)
+                {
+// take Y only
                     *dst_ptr++ = *src_ptr;
                     src_ptr += 3;
                 }

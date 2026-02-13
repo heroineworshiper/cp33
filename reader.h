@@ -149,6 +149,7 @@ public:
 };
 
 extern ArrayList<Page*> pages;
+extern int grey;
 
 #endif
 

@@ -449,12 +449,12 @@ void MWindow::show_page_fragment(int number,
             for(int i = y1; i < y2; i++)
             {
                 uint8_t *src_row = page->image->get_rows()[i] + x1;
+                uint16_t *src_row16 = (uint16_t*)page->image->get_rows()[i] + x1;
                 uint8_t *annotation_row = page->annotations->get_rows()[i] + x1;
                 uint8_t *dst_row = bitmap->get_row_pointers()[(i - zoom_y) * zoom_factor] + 
                     (x1 - zoom_x) * 4 * zoom_factor;
                 for(int j = x1; j < x2; j++)
                 {
-                    uint8_t src_value = *src_row++;
                     uint8_t annotation_value = *annotation_row++;
                     uint8_t r = 0;
                     uint8_t g = 0;
@@ -470,37 +470,68 @@ void MWindow::show_page_fragment(int number,
                         b = *color++;
                     }
                     else
-                    if(src_value != 0x7)
+                    if(grey)
                     {
-// source bit mask to RGB
-                        if((src_value & 0x1))
+// greyscale.  Minimum of bg & fg
+                        uint16_t src_value16 = *src_row16++;
+                        int r2 = src_value16 >> 11;
+                        int g2 = (src_value16 >> 5) & 0b111111;
+                        int b2 = src_value16 & 0b11111;
+                        r2 = r2 * 255 / 0b11111;
+                        g2 = g2 * 255 / 0b111111;
+                        b2 = b2 * 255 / 0b11111;
+                        if((annotation_value & 0x0f))
                         {
-                            r = 0xff;
+                            uint8_t *color = &bottom_rgb888[(annotation_value & 0x0f) * 3];
+                            int r1 = *color++;
+                            int g1 = *color++;
+                            int b1 = *color++;
+                            r = MIN(r1, r2);
+                            g = MIN(g1, g2);
+                            b = MIN(b1, b2);
                         }
-
-                        if((src_value & 0x2))
+                        else
                         {
-                            g = 0xff;
-                        }
-
-                        if((src_value & 0x4))
-                        {
-                            b = 0xff;
+                            r = r2;
+                            g = g2;
+                            b = b2;
                         }
                     }
                     else
-// background layer
-                    if((annotation_value & 0x0f))
                     {
-                        uint8_t *color = &bottom_rgb888[(annotation_value & 0x0f) * 3];
-                        r = *color++;
-                        g = *color++;
-                        b = *color++;
-                    }
-                    else
-// white
-                    {
-                        r = g = b = 0xff;
+                        uint8_t src_value = *src_row++;
+                        if(src_value != 0x7)
+                        {
+    // source bit mask to RGB
+                            if((src_value & 0x1))
+                            {
+                                r = 0xff;
+                            }
+
+                            if((src_value & 0x2))
+                            {
+                                g = 0xff;
+                            }
+
+                            if((src_value & 0x4))
+                            {
+                                b = 0xff;
+                            }
+                        }
+                        else
+    // background layer
+                        if((annotation_value & 0x0f))
+                        {
+                            uint8_t *color = &bottom_rgb888[(annotation_value & 0x0f) * 3];
+                            r = *color++;
+                            g = *color++;
+                            b = *color++;
+                        }
+                        else
+    // white
+                        {
+                            r = g = b = 0xff;
+                        }
                     }
 
                     if(zoom_factor == 1)
@@ -534,35 +565,63 @@ void MWindow::show_page_fragment(int number,
             for(int i = y1; i < y2; i++)
             {
                 uint8_t *src_row = page->image->get_rows()[i] + x1;
+                uint16_t *src_row16 = (uint16_t*)page->image->get_rows()[i] + x1;
                 uint8_t *annotation_row = page->annotations->get_rows()[i] + x1;
                 uint16_t *dst_row = (uint16_t*)bitmap->get_row_pointers()[(i - zoom_y) * zoom_factor] + 
                     (x1 - zoom_x) * zoom_factor;
                 for(int j = x1; j < x2; j++)
                 {
-                    uint8_t src_value = *src_row++;
                     uint16_t dst_value = 0;
                     uint8_t annotation_value = *annotation_row++;
-// foreground layer
+// foreground layer replaces pixel
                     if((annotation_value & 0xf0))
                     {
                         dst_value = top_rgb565[annotation_value >> 4];
                     }
                     else
-                    if(src_value != 0x7)
+                    if(grey)
                     {
+// greyscale.  Minimum of bg & fg
+                        uint16_t src_value16 = *src_row16++;
+                        if((annotation_value & 0x0f))
+                        {
+                            dst_value = bottom_rgb565[(annotation_value & 0x0f)];
+                            int r1 = dst_value >> 11;
+                            int g1 = (dst_value >> 5) & 0b111111;
+                            int b1 = dst_value & 0b11111;
+                            int r2 = src_value16 >> 11;
+                            int g2 = (src_value16 >> 5) & 0b111111;
+                            int b2 = src_value16 & 0b11111;
+                            int r = MIN(r1, r2);
+                            int g = MIN(g1, g2);
+                            int b = MIN(b1, b2);
+                            dst_value = r | g | b;
+                        }
+                        else
+                        {
+                            dst_value = src_value16;
+                        }
+                    }
+                    else
+                    {
+// 1 bit per pixel
+                        uint8_t src_value = *src_row++;
+                        if(src_value != 0x7)
+                        {
 // source bit mask to RGB
-                        dst_value = rgb565_table[src_value];
-                    }
-                    else
+                            dst_value = rgb565_table[src_value];
+                        }
+                        else
 // background layer
-                    if((annotation_value & 0x0f))
-                    {
-                        dst_value = bottom_rgb565[(annotation_value & 0x0f)];
-                    }
-                    else
-                    {
+                        if((annotation_value & 0x0f))
+                        {
+                            dst_value = bottom_rgb565[(annotation_value & 0x0f)];
+                        }
+                        else
+                        {
 // white
-                        dst_value = 0xffff;
+                            dst_value = 0xffff;
+                        }
                     }
                     
                     
