@@ -473,7 +473,7 @@ void MWindow::show_page_fragment(int number,
                     if(grey)
                     {
 // greyscale.  Minimum of bg & fg
-                        uint16_t src_value16 = *src_row16++;
+                        uint16_t src_value16 = *src_row16;
                         int r2 = src_value16 >> 11;
                         int g2 = (src_value16 >> 5) & 0b111111;
                         int b2 = src_value16 & 0b11111;
@@ -499,7 +499,7 @@ void MWindow::show_page_fragment(int number,
                     }
                     else
                     {
-                        uint8_t src_value = *src_row++;
+                        uint8_t src_value = *src_row;
                         if(src_value != 0x7)
                         {
     // source bit mask to RGB
@@ -533,6 +533,8 @@ void MWindow::show_page_fragment(int number,
                             r = g = b = 0xff;
                         }
                     }
+                    src_row16++;
+                    src_row++;
 
                     if(zoom_factor == 1)
                     {
@@ -582,7 +584,7 @@ void MWindow::show_page_fragment(int number,
                     if(grey)
                     {
 // greyscale.  Minimum of bg & fg
-                        uint16_t src_value16 = *src_row16++;
+                        uint16_t src_value16 = *src_row16;
                         if((annotation_value & 0x0f))
                         {
                             dst_value = bottom_rgb565[(annotation_value & 0x0f)];
@@ -605,7 +607,7 @@ void MWindow::show_page_fragment(int number,
                     else
                     {
 // 1 bit per pixel
-                        uint8_t src_value = *src_row++;
+                        uint8_t src_value = *src_row;
                         if(src_value != 0x7)
                         {
 // source bit mask to RGB
@@ -623,8 +625,9 @@ void MWindow::show_page_fragment(int number,
                             dst_value = 0xffff;
                         }
                     }
-                    
-                    
+                    src_row16++;
+                    src_row++;
+
                     if(zoom_factor == 1)
                     {
                         *dst_row++ = dst_value;

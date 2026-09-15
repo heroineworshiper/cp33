@@ -207,8 +207,9 @@
 #endif // _18F2450
 
 
-
-
+#define ENABLE_DEBUG
+//#define DEBUG_TOUCHPAD
+//#define DEBUG_USB
 
 typedef union 
 {
@@ -308,7 +309,7 @@ void flush_uart()
     }
 }
 
-
+#ifdef ENABLE_DEBUG
 void print_byte(uint8_t c)
 {
 	if(serial_out_count < UART_OUT_SIZE)
@@ -370,6 +371,17 @@ void print_bin(uint8_t number)
 	print_byte((number & 0x1) ? '1' : '0');
 }
 
+
+#else // ENABLE_DEBUG
+
+void print_byte(uint8_t c);
+void print_text(const uint8_t *s);
+void print_number_nospace(uint16_t number);
+void print_number(uint16_t number);
+void print_hex2(uint8_t number);
+void print_bin(uint8_t number);
+
+#endif // !ENABLE_DEBUG
 
 // USB HID ---------------------------------------------------------------------
 
@@ -693,8 +705,10 @@ void usb_prepare_setup()
 
 void handle_usb_reset()
 {
-//print_text("handle_usb_reset\n");
-//flush_uart();
+#ifdef DEBUG_USB
+print_text("handle_usb_reset\n");
+flush_uart();
+#endif
 // Clears all USB interrupts
     UIR = 0;
 // Reset to default address
@@ -904,17 +918,19 @@ void handle_usb_ctrl_setup()
 	ctrl_trf_session_owner = MUID_NULL;
 	data_count = 0;
 
-// print_text("handle_usb_ctrl_setup ");
-// print_hex2(setup_out_packet[0]);
-// print_hex2(setup_out_packet[1]);
-// print_hex2(setup_out_packet[2]);
-// print_hex2(setup_out_packet[3]);
-// print_hex2(setup_out_packet[4]);
-// print_hex2(setup_out_packet[5]);
-// print_hex2(setup_out_packet[6]);
-// print_hex2(setup_out_packet[7]);
-// print_text("\n");
-// flush_uart();
+#ifdef DEBUG_USB
+print_text("handle_usb_ctrl_setup ");
+print_hex2(setup_out_packet[0]);
+print_hex2(setup_out_packet[1]);
+print_hex2(setup_out_packet[2]);
+print_hex2(setup_out_packet[3]);
+print_hex2(setup_out_packet[4]);
+print_hex2(setup_out_packet[5]);
+print_hex2(setup_out_packet[6]);
+print_hex2(setup_out_packet[7]);
+print_byte('\n');
+flush_uart();
+#endif
 
 // scan the data received
 // USBCheckStdRequest
@@ -997,12 +1013,14 @@ void handle_usb_ctrl_output()
 	GET_EP_STAT(temp, EP0_OUT);
     temp &= 0b00111100;
 
-// print_text("handle_usb_ctrl_output ");
-// print_hex2(EP0_OUT[0]);
-// print_hex2(EP0_OUT[1]);
-// print_hex2(EP0_OUT[2]);
-// print_hex2(EP0_OUT[3]);
-// print_text("\n");
+#ifdef DEBUG_USB
+print_text("handle_usb_ctrl_output ");
+print_hex2(EP0_OUT[0]);
+print_hex2(EP0_OUT[1]);
+print_hex2(EP0_OUT[2]);
+print_hex2(EP0_OUT[3]);
+print_byte('\n');
+#endif
 	if(temp == (SETUP_TOKEN << 2))
     {
     	handle_usb_ctrl_setup();
@@ -1414,6 +1432,13 @@ void touchpad_init()
   { // verify correct ack byte
     flags.touchpad_error = 1;
   }
+
+
+#ifdef DEBUG_TOUCHPAD
+  print_text("touchpad initialized ");
+  print_number(flags.touchpad_error);
+  print_byte('\n');
+#endif
 }
 
 
@@ -1498,9 +1523,11 @@ void handle_pad()
 
     if(mstat != prev_mstat)
     {
+#ifdef DEBUG_TOUCHPAD
         print_bin(mstat);
-        print_text("\n");
+        print_byte('\n');
         flush_uart();
+#endif // DEBUG_TOUCHPAD
         prev_mstat = mstat;
     }
 
@@ -1509,11 +1536,13 @@ void handle_pad()
         left_button.changed ||
         right_button.changed)
     {
-//         print_text("P ");
-//          print_number(mx);
-//          print_number(my);
-//          print_text("\n");
-//          flush_uart();
+#ifdef DEBUG_TOUCHPAD
+        print_text("P ");
+        print_number(mx);
+        print_number(my);
+        print_byte('\n');
+        flush_uart();
+#endif
 
 // ID from Arduino HID_::SendReport
         hid_in_packet[0] = 1;
