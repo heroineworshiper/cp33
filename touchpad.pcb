@@ -927,13 +927,6 @@ Element["" "Standard SMT resistor, capacitor etc" "" "0603" 1108.00mil 761.00mil
 
 	)
 
-Element["" "Standard SMT resistor, capacitor etc" "" "0603" 567.50mil 1047.00mil -31.50mil 31.50mil 1 100 ""]
-(
-	Pad[-4.92mil 30.00mil 4.92mil 30.00mil 29.52mil 20.00mil 35.52mil "1" "1" "square"]
-	Pad[-4.92mil -30.00mil 4.92mil -30.00mil 29.52mil 20.00mil 35.52mil "2" "2" "square"]
-
-	)
-
 Element["" "Standard SMT resistor, capacitor etc" "" "0603" 580.50mil 739.50mil -31.50mil 31.50mil 1 100 ""]
 (
 	Pad[-4.92mil 30.00mil 4.92mil 30.00mil 29.52mil 20.00mil 35.52mil "1" "1" "square"]
@@ -1078,6 +1071,13 @@ Element["" "Standard SMT resistor, capacitor etc" "" "1206" 830.00mil 1076.50mil
 	ElementLine [-23.62mil 37.40mil 23.62mil 37.40mil 8.00mil]
 
 	)
+
+Element["" "Standard SMT resistor, capacitor etc" "" "0603" 593.00mil 1073.50mil 31.50mil 31.50mil 2 100 ""]
+(
+	Pad[30.00mil -4.92mil 30.00mil 4.92mil 29.52mil 20.00mil 35.52mil "1" "1" "square"]
+	Pad[-30.00mil -4.92mil -30.00mil 4.92mil 29.52mil 20.00mil 35.52mil "2" "2" "square"]
+
+	)
 Layer(1 "component")
 (
 )
@@ -1147,15 +1147,11 @@ Layer(5 "signal1")
 	Line[710.50mil 991.00mil 710.50mil 1080.00mil 10.00mil 20.00mil "clearline"]
 	Line[883.50mil 1100.00mil 849.50mil 1134.00mil 10.00mil 20.00mil "clearline"]
 	Line[849.50mil 1134.00mil 476.50mil 1134.00mil 10.00mil 20.00mil "clearline"]
-	Line[630.50mil 975.00mil 630.50mil 1135.00mil 10.00mil 20.00mil "clearline"]
-	Line[630.00mil 974.00mil 630.00mil 1087.00mil 10.00mil 20.00mil "clearline"]
 	Line[1134.50mil 1110.50mil 1201.00mil 1044.00mil 10.00mil 20.00mil "clearline"]
 	Line[1111.00mil 1033.50mil 1111.00mil 879.00mil 10.00mil 20.00mil "clearline"]
 	Line[659.50mil 791.00mil 602.50mil 791.00mil 10.00mil 20.00mil "clearline"]
 	Line[582.50mil 772.50mil 582.50mil 809.50mil 10.00mil 20.00mil "clearline"]
 	Line[662.00mil 815.00mil 612.00mil 815.00mil 10.00mil 20.00mil "clearline"]
-	Line[926.50mil 878.00mil 958.00mil 909.50mil 10.00mil 20.00mil "clearline"]
-	Line[958.00mil 909.50mil 958.00mil 993.00mil 10.00mil 20.00mil "clearline"]
 	Line[654.00mil 843.00mil 922.00mil 843.00mil 10.00mil 20.00mil "clearline"]
 	Line[922.00mil 843.00mil 996.00mil 917.00mil 10.00mil 20.00mil "clearline"]
 	Line[660.50mil 638.00mil 545.00mil 638.00mil 10.00mil 20.00mil "clearline"]
@@ -1172,29 +1168,30 @@ Layer(5 "signal1")
 	Line[483.50mil 840.00mil 483.50mil 893.50mil 10.00mil 20.00mil "clearline"]
 	Line[483.50mil 893.50mil 483.00mil 894.00mil 10.00mil 20.00mil "clearline"]
 	Line[582.00mil 811.50mil 603.00mil 790.50mil 10.00mil 20.00mil "clearline"]
-	Line[622.50mil 873.50mil 922.00mil 873.50mil 10.00mil 20.00mil "clearline"]
-	Line[922.00mil 873.50mil 958.50mil 910.00mil 10.00mil 20.00mil "clearline"]
 	Line[587.50mil 715.00mil 654.50mil 715.00mil 10.00mil 20.00mil "clearline"]
 	Line[487.00mil 1015.50mil 569.00mil 1015.50mil 10.00mil 20.00mil "clearline"]
 	Line[569.00mil 1015.50mil 569.50mil 1015.00mil 10.00mil 20.00mil "clearline"]
 	Line[569.50mil 1015.00mil 569.50mil 860.50mil 10.00mil 20.00mil "clearline"]
 	Line[569.50mil 860.50mil 613.50mil 816.50mil 10.00mil 20.00mil "clearline"]
-	Line[580.50mil 1081.50mil 605.50mil 1056.50mil 10.00mil 20.00mil "clearline"]
-	Line[605.50mil 1056.50mil 605.50mil 874.00mil 10.00mil 20.00mil "clearline"]
-	Line[605.50mil 874.00mil 668.00mil 874.00mil 10.00mil 20.00mil "clearline"]
 	Line[1188.00mil 831.50mil 1188.00mil 879.00mil 10.00mil 20.00mil "clearline"]
 	Line[1201.00mil 1044.00mil 1201.00mil 1003.50mil 10.00mil 20.00mil "clearline"]
 	Line[714.00mil 1074.50mil 761.50mil 1074.50mil 10.00mil 20.00mil "clearline"]
 	Line[761.50mil 1074.50mil 762.00mil 1074.00mil 10.00mil 20.00mil "clearline"]
 	Line[897.00mil 1071.00mil 966.00mil 1071.00mil 10.00mil 20.00mil "clearline"]
 	Line[966.00mil 1071.00mil 966.50mil 1071.50mil 10.00mil 20.00mil "clearline"]
+	Line[640.50mil 968.00mil 592.00mil 1016.50mil 10.00mil 20.00mil "clearline"]
+	Line[592.00mil 1016.50mil 592.00mil 1135.00mil 10.00mil 20.00mil "clearline"]
+	Line[619.00mil 1071.00mil 675.50mil 1071.00mil 10.00mil 20.00mil "clearline"]
+	Line[675.50mil 1071.00mil 677.00mil 1069.50mil 10.00mil 20.00mil "clearline"]
+	Line[570.00mil 1074.50mil 570.00mil 859.50mil 10.00mil 20.00mil "clearline"]
+	Line[570.00mil 859.50mil 571.00mil 858.50mil 10.00mil 20.00mil "clearline"]
 )
 Layer(6 "signal2")
 (
 )
 Layer(7 "signal3")
 (
-	Line[558.00mil 445.50mil 1079.50mil 1017.00mil 10.00mil 20.00mil "clearline"]
+	Line[558.00mil 445.50mil 690.00mil 1077.00mil 10.00mil 20.00mil "clearline"]
 	Line[1059.50mil 435.00mil 973.00mil 1080.50mil 10.00mil 20.00mil "clearline"]
 	Line[1346.50mil 438.00mil 695.50mil 1079.50mil 10.00mil 20.00mil "clearline"]
 	Line[1056.00mil 432.50mil 427.50mil 396.50mil 10.00mil 20.00mil "clearline"]
@@ -1212,7 +1209,7 @@ Layer(10 "silk")
 	Text[628.00mil 305.00mil 1 78 "MCLR" ""]
 	Text[722.50mil 303.00mil 1 77 "PGD" ""]
 	Text[708.00mil 840.50mil 0 78 "LP2989" ""]
-	Text[517.50mil 373.50mil 1 77 "3.3V" ""]
+	Text[517.50mil 373.50mil 1 77 "5V" ""]
 	Text[38.61mil 35.88mil 0 117 "USB TO TOUCHPAD" "clearline"]
 	Text[821.50mil 473.00mil 0 78 "0R" ""]
 	Text[955.00mil 477.50mil 0 65 "4.7uF" "clearline"]
@@ -1246,4 +1243,5 @@ Layer(10 "silk")
 	Text[265.00mil 454.50mil 0 78 "15pF" ""]
 	Text[395.50mil 628.50mil 0 78 "12Mhz" ""]
 	Text[783.50mil 1119.00mil 0 78 "100uF" ""]
+	Text[329.00mil 1225.50mil 0 78 "OMIT LP2989 FOR 18F PART" ""]
 )

@@ -100,9 +100,9 @@
 #pragma config IESO = OFF       // Internal/External Oscillator Switchover bit (Oscillator Switchover mode disabled)
 
 // CONFIG2L
-#pragma config PWRTEN = OFF     // Power-up Timer Enable bit (PWRT disabled)
-#pragma config BOREN = SBORDIS  // Brown-out Reset Enable bits (Brown-out Reset enabled in hardware only (SBOREN is disabled))
-#pragma config BORV = 19        // Brown-out Reset Voltage bits (VBOR set to 3.0 V nominal)
+#pragma config PWRTEN = ON      // Power-up Timer Enable bit (PWRT disabled)
+#pragma config BOREN = ON       // Brown-out Reset Enable bits (Brown-out Reset enabled in hardware only (SBOREN is disabled))
+#pragma config BORV = 30        // Brown-out Reset Voltage bits (VBOR set to 3.0 V nominal)
 
 // CONFIG2H
 #pragma config WDTEN = ON       // Watchdog Timer Enable bit (WDT is always enabled. SWDTEN bit has no effect.)
@@ -216,6 +216,7 @@ typedef union
 	struct
 	{
 		unsigned interrupt_complete : 1;
+        unsigned touchpad_ready : 1;
         unsigned touchpad_error : 1;
         unsigned overflow : 1;
 	};
@@ -1389,6 +1390,8 @@ uint8_t tp_read()
 void touchpad_init()
 {
   flags.touchpad_error = 0; // start with no error
+  flags.touchpad_ready = 0;
+
   CLK_TRIS = 1; // float the clock and data to touchpad
   DAT_TRIS = 1;
   //  Sending reset command to touchpad
@@ -1433,6 +1436,8 @@ void touchpad_init()
     flags.touchpad_error = 1;
   }
 
+
+    if(!flags.touchpad_error) flags.touchpad_ready = 1;
 
 #ifdef DEBUG_TOUCHPAD
   print_text("touchpad initialized ");
@@ -1492,6 +1497,8 @@ void handle_pad()
     if (tp_read() != 0xfa) 
     { // verify correct ack byte
     // bad ack - pass to future error handler
+        flags.touchpad_error = 1;
+        flags.touchpad_ready = 0;
     }
     mstat = tp_read(); // save into status variable
     mx = tp_read(); // save into x variable
@@ -1632,7 +1639,7 @@ int main(int argc, char** argv)
 
 // wait for the Elan to start
     delay(1000);
-    touchpad_init();
+//    touchpad_init();
 
     LBUTTON_TRIS = 1;
     RBUTTON_TRIS = 1;
@@ -1672,7 +1679,10 @@ int main(int argc, char** argv)
         ClrWdt();
         handle_uart();
 
-        handle_pad();
+        if(!flags.touchpad_ready)
+            touchpad_init();
+        else
+            handle_pad();
     }
     
     return (EXIT_SUCCESS);
