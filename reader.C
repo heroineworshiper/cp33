@@ -329,7 +329,11 @@ void* button_thread(void *ptr)
                 {
                     up_button.next_time = up_button.time + REPEAT2;
                 }
-                Reader::instance->next_page(2, 1);
+                
+                if(Reader::mode == CAPTURE_MODE)
+                    Capture::instance->next_page();
+                else
+                    Reader::instance->next_page(2, 1);
             }
         }
         else
@@ -341,7 +345,12 @@ void* button_thread(void *ptr)
                 {
                     down_button.next_time = down_button.time + REPEAT2;
                 }
-                Reader::instance->prev_page(2, 1);
+                
+                
+                if(Reader::mode == CAPTURE_MODE)
+                    Capture::instance->prev_page();
+                else
+                    Reader::instance->prev_page(2, 1);
             }
         }
         
