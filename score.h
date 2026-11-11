@@ -239,6 +239,7 @@ public:
     Line(double start_time, int x1, int x_pad, int staves);
 
     double start_time;
+// inclusive
     double end_time;
 // extents of each staff, relative to y1
     ArrayList<int> min_y;
@@ -249,6 +250,8 @@ public:
     int x1;
 // x to add to objects, for replicated objects
     int x_pad;
+// the page number
+    int page;
 };
 
 

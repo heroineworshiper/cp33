@@ -57,6 +57,7 @@ public:
     void setup();
 
     Score *score;
+    int capture_page;
     int current_staff;
     double selection_start;
     double selection_end;
@@ -76,6 +77,8 @@ public:
     void push_undo_after(int changed = 1);
     void pop_undo();
     void pop_redo();
+    void next_page();
+    void prev_page();
     void load_undo(CaptureUndo *undo);
 // set all the undo levels except the current one to changed
     void set_unchanged();

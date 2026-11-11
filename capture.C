@@ -1,6 +1,6 @@
 /*
  * MUSIC READER
- * Copyright (C) 2021-2025 Adam Williams <broadcast at earthling dot net>
+ * Copyright (C) 2021-2026 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,6 +34,7 @@
 
 // cursor position
 int current_staff = 0; // number of staff or -1 if all
+int capture_page = 0; // page being shown in capture mode
 double selection_start = 3;  // beat
 double selection_end = 3;
 int selection_line = 0;
@@ -122,6 +123,7 @@ CaptureUndo::~CaptureUndo()
 
 void CaptureUndo::setup()
 {
+    this->capture_page = ::capture_page;
     this->current_staff = ::current_staff;
     this->selection_start = ::selection_start;
     this->selection_end = ::selection_end;
@@ -676,20 +678,24 @@ void Capture::process_group(Staff *staff, Group *group)
 void Capture::draw_group(Line *line, int y, Staff *staff, Group *group)
 {
 // set all the absolute coords for the images here
-    for(int k = 0; k < group->images.size(); k++)
+    if(line->page == capture_page)
     {
-        DrawObject *image = group->images.get(k);
-        image->abs_x = image->x - line->x1 + line->x_pad;
-        image->abs_y = image->y + y;
-        if(image->pixmap)
-            mwindow->draw_pixmap(image->pixmap,
-                image->abs_x,
-                image->abs_y);
+        for(int k = 0; k < group->images.size(); k++)
+        {
+            DrawObject *image = group->images.get(k);
+            image->abs_x = image->x - line->x1 + line->x_pad;
+            image->abs_y = image->y + y;
+            if(image->pixmap)
+                mwindow->draw_pixmap(image->pixmap,
+                    image->abs_x,
+                    image->abs_y);
+        }
     }
 
     switch(group->type)
     {
         case IS_CLEFF:
+// sweep up the current state
             staff->current_cleff = group->cleff;
             staff->current_cleff_obj = group;
             break;
@@ -700,38 +706,44 @@ void Capture::draw_group(Line *line, int y, Staff *staff, Group *group)
         {
             staff->current_8va = group;
 // draw octave line
-            DrawObject *image = group->images.get(0);
-            int y2 = image->y + y + image->pixmap->get_h() / 2;
-            int x1 = image->x - line->x1 + line->x_pad + image->pixmap->get_w();
-            int x2 = image->x2 - line->x1 + line->x_pad;
-            
-            draw_8va_line(group, x1, x2, y2);
+            if(line->page == capture_page)
+            {
+                DrawObject *image = group->images.get(0);
+                int y2 = image->y + y + image->pixmap->get_h() / 2;
+                int x1 = image->x - line->x1 + line->x_pad + image->pixmap->get_w();
+                int x2 = image->x2 - line->x1 + line->x_pad;
+
+                draw_8va_line(group, x1, x2, y2);
+            }
             break;
         }
         case IS_BAR:
 // draw bar across all the staves for 1st staff
 // draw bar across 1 staff for the later staves, for debugging
-            if(staff == Score::instance->staves.get(0))
+            if(line->page == capture_page)
             {
-                DrawObject *image = group->images.get(0);
-                int last = Score::instance->staves.size() - 1;
-                image->w = BEAT_PAD;
-                image->h = line->y1.get(last) + LINE_SPACING * 4 - 
-                    image->abs_y;
-                mwindow->BC_Window::draw_line(image->abs_x, 
-                    image->abs_y,
-                    image->abs_x,
-                    image->h + image->abs_y);
-            }
-            else
-            {
-                DrawObject *image = group->images.get(0);
-                image->w = BEAT_PAD;
-                image->h = LINE_SPACING * 4;
-                mwindow->BC_Window::draw_line(image->abs_x, 
-                    image->abs_y,
-                    image->abs_x,
-                    image->h + image->abs_y);
+                if(staff == Score::instance->staves.get(0))
+                {
+                    DrawObject *image = group->images.get(0);
+                    int last = Score::instance->staves.size() - 1;
+                    image->w = BEAT_PAD;
+                    image->h = line->y1.get(last) + LINE_SPACING * 4 - 
+                        image->abs_y;
+                    mwindow->BC_Window::draw_line(image->abs_x, 
+                        image->abs_y,
+                        image->abs_x,
+                        image->h + image->abs_y);
+                }
+                else
+                {
+                    DrawObject *image = group->images.get(0);
+                    image->w = BEAT_PAD;
+                    image->h = LINE_SPACING * 4;
+                    mwindow->BC_Window::draw_line(image->abs_x, 
+                        image->abs_y,
+                        image->abs_x,
+                        image->h + image->abs_y);
+                }
             }
             break;
     }
@@ -1063,7 +1075,55 @@ void Capture::draw_score(int do_flash, int do_lock)
 
 
 
-// pass 2: draw the score & divide into lines
+// pass 2: paginate
+    int staves = score->staves.size();
+    int drawing_page = 0;
+// amount to subtract from the current line y
+    int y_offset = 0;
+    for(int line_n = 0; line_n < score->lines.size(); line_n++)
+    {
+        line = score->lines.get(line_n);
+        int min_y = 0x7fffffff;
+        int max_y = 0;
+
+//        printf("Capture::draw_score %d line=%d\n", __LINE__, line_n);
+        for(int i = 0; i < staves; i++)
+        {
+            int line_y1 = line->y1.get(i);
+            int line_min = line->min_y.get(i);
+            int line_max = line->max_y.get(i);
+//            printf("    y1=%d min_y=%d max_y=%d\n", 
+//                line_y1,
+//                line_min,
+//                line_max);
+            if(line_y1 + line_min < min_y) min_y = line_y1 + line_min;
+            if(line_y1 + line_max > max_y) max_y = line_y1 + line_max;
+        }
+
+// new page
+        if(max_y + y_offset > ROOT_H)
+        {
+            drawing_page++;
+            y_offset += min_y;
+            int top = -line->min_y.get(0);
+// add space above 1st line
+            if(top > STAFF_SPACING)
+                y_offset -= top;
+            else
+                y_offset -= STAFF_SPACING;
+        }
+
+// shift the line
+        for(int i = 0; i < staves; i++)
+        {
+            int line_y1 = line->y1.get(i);
+            line->y1.set(i, line_y1 - y_offset);
+        }
+        line->page = drawing_page;
+    }
+
+
+// pass 3: draw the score
     current_time = 0;
     double line_start_time = 0;
 // the cursor extents for the current line
@@ -1071,7 +1131,7 @@ void Capture::draw_score(int do_flash, int do_lock)
     int cursor_y2 = 0;
 
 // reset the temporaries
-    for(int i = 0; i < score->staves.size(); i++)
+    for(int i = 0; i < staves; i++)
     {
         Staff *staff = score->staves.get(i);
         staff->reset(0);
@@ -1080,14 +1140,17 @@ void Capture::draw_score(int do_flash, int do_lock)
 //printf("MWindow::draw_score %d lines=%d\n", __LINE__, score->lines.size());
     for(int line_n = 0; line_n < score->lines.size(); line_n++)
     {
-        int staves = score->staves.size();
         line = score->lines.get(line_n);
+//        if(line->page != capture_page) continue;
+        
+        
         current_time = line->start_time;
 //printf("MWindow::draw_score %d line=%d current_time=%f\n",
 //__LINE__, line_n, current_time);
 
 // draw the cursor
-        if(selection_end >= line->start_time &&
+        if(line->page == capture_page &&
+            selection_end >= line->start_time &&
             selection_start <= line->end_time &&
             selection_line == line_n)
         {
@@ -1132,68 +1195,72 @@ void Capture::draw_score(int do_flash, int do_lock)
 //         mwindow->BC_Window::draw_line(x2, min_y, x2, max_y);
 
 // draw staff lines
-        for(int i = 0; i < score->staves.size(); i++)
+        if(line->page == capture_page)
         {
-            Staff *staff = score->staves.get(i);
-            for(int j = 0; j < 5; j++)
+            for(int i = 0; i < score->staves.size(); i++)
             {
-                mwindow->BC_Window::draw_line(x1, 
-                    line->y1.get(i) + j * LINE_SPACING, 
-                    x2, 
-                    line->y1.get(i) + j * LINE_SPACING);
-            }
+                Staff *staff = score->staves.get(i);
 
-// replicate cleffs, key signatures, 8va markers
-            if(line_n > 0)
-            {
-                x = x1;
-
-// replicate the cleff
-                if(staff->current_cleff_obj)
+                for(int j = 0; j < 5; j++)
                 {
-                    Group *group = staff->current_cleff_obj;
-                    int min_x = group->get_x();
-                    DrawObject *image = group->images.get(0);
-// printf("MWindow::draw_score %d x=%d image->x=%d min_x=%d\n", 
-// __LINE__, x, image->x, min_x);
-                    mwindow->draw_pixmap(image->pixmap,
-                        x + image->x - min_x,
-                        image->y + line->y1.get(i));
-                    x += group->get_w() + BEAT_PAD;
+                    mwindow->BC_Window::draw_line(x1, 
+                        line->y1.get(i) + j * LINE_SPACING, 
+                        x2, 
+                        line->y1.get(i) + j * LINE_SPACING);
                 }
 
-// replicate the key signature
-                if(staff->current_key)
+    // replicate cleffs, key signatures, 8va markers
+                if(line_n > 0)
                 {
-                    Group *group = staff->current_key;
-                    int min_x = group->get_x();
-                    for(int k = 0; k < group->images.size(); k++)
-                    {
-                        DrawObject *image = group->images.get(k);
-                        mwindow->draw_pixmap(image->pixmap,
-                            x + image->x - min_x,
-                            image->y + line->y1.get(i));
-                    }
-                    x += group->get_w() + BEAT_PAD;
-                }
+                    x = x1;
 
-// extend the 8va
-                if(staff->current_8va)
-                {
-                    Group *group = staff->current_8va;
-                    DrawObject *image = group->images.get(0);
-                    if(image->x2 > line->x1)
+    // replicate the cleff
+                    if(staff->current_cleff_obj)
                     {
-//printf("Capture::draw_score %d line_n=%d x2=%d x1=%d 8va continues\n", 
-//__LINE__, line_n, image->x2, line->x1);
+                        Group *group = staff->current_cleff_obj;
                         int min_x = group->get_x();
+                        DrawObject *image = group->images.get(0);
+    // printf("MWindow::draw_score %d x=%d image->x=%d min_x=%d\n", 
+    // __LINE__, x, image->x, min_x);
                         mwindow->draw_pixmap(image->pixmap,
                             x + image->x - min_x,
                             image->y + line->y1.get(i));
-                        int x1 = x + image->x - min_x + image->pixmap->get_w();
-                        int x2 = x + image->x2 - line->x1;
-                        int y2 = image->y + line->y1.get(i) + image->pixmap->get_h() / 2;
-                        draw_8va_line(group, x1, x2, y2);
+                        x += group->get_w() + BEAT_PAD;
+                    }
+
+    // replicate the key signature
+                    if(staff->current_key)
+                    {
+                        Group *group = staff->current_key;
+                        int min_x = group->get_x();
+                        for(int k = 0; k < group->images.size(); k++)
+                        {
+                            DrawObject *image = group->images.get(k);
+                            mwindow->draw_pixmap(image->pixmap,
+                                x + image->x - min_x,
+                                image->y + line->y1.get(i));
+                        }
+                        x += group->get_w() + BEAT_PAD;
+                    }
+
+    // extend the 8va
+                    if(staff->current_8va)
+                    {
+                        Group *group = staff->current_8va;
+                        DrawObject *image = group->images.get(0);
+                        if(image->x2 > line->x1)
+                        {
+    //printf("Capture::draw_score %d line_n=%d x2=%d x1=%d 8va continues\n", 
+    //__LINE__, line_n, image->x2, line->x1);
+                            int min_x = group->get_x();
+                            mwindow->draw_pixmap(image->pixmap,
+                                x + image->x - min_x,
+                                image->y + line->y1.get(i));
+                            int x1 = x + image->x - min_x + image->pixmap->get_w();
+                            int x2 = x + image->x2 - line->x1;
+                            int y2 = image->y + line->y1.get(i) + image->pixmap->get_h() / 2;
+                            draw_8va_line(group, x1, x2, y2);
+                        }
                     }
                 }
             }
@@ -1352,6 +1419,8 @@ void Capture::button_press_event()
         for(int line_n = 0; line_n < score->lines.size(); line_n++)
         {
             Line *line = score->lines.get(line_n);
+            if(line->page != capture_page) continue;
+
             for(int i = 0; i < score->staves.size(); i++)
             {
                 Staff *staff = score->staves.get(i);
@@ -1660,6 +1729,7 @@ void Capture::draw_cursor()
 
 void Capture::load_undo(CaptureUndo *undo)
 {
+    ::capture_page = undo->capture_page;
     ::current_staff = undo->current_staff;
     ::selection_start = undo->selection_start;
     ::selection_end = undo->selection_end;
@@ -1745,6 +1815,22 @@ void Capture::set_unchanged()
     }
 }
 
+void Capture::next_page()
+{
+    capture_page++;
+    draw_score(1, 1);
+}
+
+void Capture::prev_page()
+{
+    if(capture_page > 0)
+    {
+        capture_page--;
+        draw_score(1, 1);
+    }
+}
+
+
 void Capture::new_score()
 {
     push_undo_before();
@@ -1761,6 +1847,7 @@ void Capture::new_score()
     group = bass->groups.append(new Group(0, IS_CLEFF));
     group->cleff = BASS;
 
+    capture_page = 0;
     score_changed = 0;
     selection_start = selection_end = treble->max_beat();
     current_staff = 0;
@@ -1956,6 +2043,7 @@ int Capture::load_score(char *path)
         
         reset_undo();
         score_changed = 0;
+        capture_page = 0;
         CaptureMenu::instance->update_save();
     }
 

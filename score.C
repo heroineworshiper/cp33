@@ -26,7 +26,7 @@
 #include <string.h>
 
 Score* Score::instance = 0;
-
+extern int capture_page;
 
 DrawObject::DrawObject(int x,
     int y,
@@ -505,12 +505,39 @@ int Score::find_delete_object(int cursor_x,
     *staff_n = 0;
     *group_n = 0;
     *image_n = 0;
+// compute start & end time inclusive of current page
+    double start_time = 0;
+    double end_time = 0;
+    for(int line1 = 0; line1 < lines.size(); line1++)
+    {
+        Line *line = lines.get(line1);
+        if(line->page == ::capture_page)
+        {
+            start_time = line->start_time;
+            for(int line2 = line1; line2 < lines.size(); line2++)
+            {
+                line = lines.get(line2);
+                if(line->page == ::capture_page)
+                    end_time = line->end_time;
+                else
+                    break;
+            }
+            break;
+        }
+    }
+
+//    printf("Score::find_delete_object %d start_time=%f end_time=%f\n", 
+//        __LINE__, start_time, end_time);
+    
     for(*staff_n = 0; *staff_n < staves.size(); (*staff_n)++)
     {
         Staff *staff = staves.get(*staff_n);
         for(*group_n = 0; *group_n < staff->groups.size(); (*group_n)++)
         {
             Group *group = staff->groups.get(*group_n);
+// in current page
+            if(group->time < start_time || group->time > end_time) continue;
+            
             switch(group->type)
             {
                 case IS_KEY:
@@ -1135,6 +1162,7 @@ Line::Line(double start_time, int x1, int x_pad, int staves)
     this->start_time = this->end_time = start_time;
     this->x1 = x1;
     this->x_pad = x_pad;
+    this->page = 0;
     for(int i = 0; i < staves; i++)
     {
         max_y.append(LINE_SPACING * 4);

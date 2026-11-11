@@ -488,7 +488,10 @@ PrevPage::PrevPage(int x, int y)
 int PrevPage::handle_event()
 {
     unlock_window();
-    Reader::instance->prev_page(1, 1);
+    if(Reader::mode == CAPTURE_MODE)
+        Capture::instance->prev_page();
+    else
+        Reader::instance->prev_page(1, 1);
     lock_window();
     return 1;
 }
@@ -502,7 +505,10 @@ NextPage::NextPage(int x, int y)
 int NextPage::handle_event()
 {
     unlock_window();
-    Reader::instance->next_page(1, 1);
+    if(Reader::mode == CAPTURE_MODE)
+        Capture::instance->next_page();
+    else
+        Reader::instance->next_page(1, 1);
     lock_window();
     return 1;
 }
