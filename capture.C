@@ -1086,7 +1086,8 @@ void Capture::draw_score(int do_flash, int do_lock)
         int min_y = 0x7fffffff;
         int max_y = 0;
 
-//        printf("Capture::draw_score %d line=%d\n", __LINE__, line_n);
+//        printf("Capture::draw_score %d line=%d y_offset=%d\n", 
+//            __LINE__, line_n, y_offset);
         for(int i = 0; i < staves; i++)
         {
             int line_y1 = line->y1.get(i);
@@ -1101,7 +1102,9 @@ void Capture::draw_score(int do_flash, int do_lock)
         }
 
 // new page
-        if(max_y + y_offset > ROOT_H)
+//        printf("Capture::draw_score %d max_y + y_offset=%d\n", 
+//            __LINE__, max_y + y_offset);
+        if(max_y - y_offset > ROOT_H)
         {
             drawing_page++;
             y_offset += min_y;
@@ -1118,6 +1121,7 @@ void Capture::draw_score(int do_flash, int do_lock)
         {
             int line_y1 = line->y1.get(i);
             line->y1.set(i, line_y1 - y_offset);
+//            printf("    y1=%d\n", line->y1.get(i));
         }
         line->page = drawing_page;
     }
